@@ -1,0 +1,10 @@
+﻿Name: streamlit
+Version: 1.64.0
+Summary: A faster way to build and share data apps
+Home-page: https://streamlit.io
+Author: 
+Author-email: Snowflake Inc <hello@streamlit.io>
+License-Expression: Apache-2.0
+Location: C:\Users\tajpr\AppData\Local\Programs\Python\Python314\Lib\site-packages
+Requires: altair, anyio, click, httptools, itsdangerous, numpy, packaging, pandas, pillow, protobuf, pyarrow, pydeck, python-multipart, requests, starlette, toml, typing-extensions, uvicorn, watchdog, websockets
+Required-by: 
