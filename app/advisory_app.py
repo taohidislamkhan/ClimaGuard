@@ -415,6 +415,20 @@ def main() -> None:
         )
         return
 
+    # Quick artefact-status banner — lets deployers verify at a glance which
+    # outputs are present in this build. Missing items degrade gracefully.
+    artefacts = {
+        "advisories":            ADV_PATH.exists(),
+        "phase6_metrics":        METRICS_PATH.exists(),
+        "shap csv (overall)":    (ROOT / "output" / "shap_importance_overall_classifier.csv").exists(),
+        "models/phase6 dir":     MODEL_DIR.exists() and any(MODEL_DIR.glob("*.joblib")),
+    }
+    n_ok = sum(artefacts.values())
+    status = "🟢" if n_ok == len(artefacts) else "🟡" if n_ok >= 2 else "🔴"
+    with st.expander(f"{status} Artefact status ({n_ok}/{len(artefacts)})", expanded=False):
+        for k, v in artefacts.items():
+            st.write(f"- {'✅' if v else '❌'}  {k}")
+
     sel = sidebar()
     if sel is None:
         return

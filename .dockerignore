@@ -1,0 +1,35 @@
+# Mirror .gitignore with Docker-specific bits to keep the image small.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+ENV/
+env/
+.git/
+.gitignore
+.puku/
+.vscode/
+.idea/
+.streamlit/secrets.toml
+
+# Raw + intermediate data the container doesn't need at startup.
+data/raw/
+data/processed/featured_data.csv
+
+# Old heavyweight artifact superseded by models/phase6/.
+models/model.pkl
+
+# Scratch / log files.
+*.log
+*.tmp
+_*.txt
+_h*.txt
+_run*.txt
+_metrics*.csv
+_adv*.csv
+_rs*.json
+_as*.json
+_shap_*
+_*.py
+_p.txt
+README.md
