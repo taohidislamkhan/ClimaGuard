@@ -55,7 +55,6 @@ data/raw/
 data/processed/featured_data.csv
 
 # --- OLD model files (replaced by Phase 6 winners under models/phase6/) ---
-models/model.pkl
 
 # --- Streamlit caches ---
 .streamlit/secrets.toml
@@ -77,6 +76,5 @@ _p.txt
 # --- Flask dashboard runtime state ---
 data/cache/risk_history.db
 
-# --- Large local-only files (exceed GitHub 100 MB limit) ---
+# --- Large local-only files (editor index, exceeds GitHub 100 MB limit) ---
 .puku/
-models/model.pkl
