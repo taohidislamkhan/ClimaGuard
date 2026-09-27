@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<div class="grid gap-4 mt-2" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);">
+  <!-- Profile form -->
+  {% call ui.card("Your profile", "user-round-pen", cls="p-5", sub="Saved on this computer's ClimaGuard server (SQLite, single user). Nothing is stored in the browser.") %}
+    <form id="hp-form" class="mt-4" novalidate>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" maxlength="30" required></div>
+        <div class="field"><label for="f-age">Age</label><input id="f-age" name="age" type="number" min="1" max="110" required></div>
+        <div class="field col-span-2"><label for="f-location">Home division</label>
+          <select id="f-location" name="location">{% for d in divisions %}<option>{{ d }}</option>{% endfor %}</select>
+          <div class="hint">Pages show the division picked in the header; the default is set in Settings.</div></div>
+      </div>
+
+      <div class="mt-4">
+        <div class="text-[12px] font-semibold text-[var(--heading)]">Body mass index</div>
+        <div class="seg mt-2" id="bmi-mode">
+          <button type="button" class="active" data-mode="bmi">Enter BMI</button>
+          <button type="button" data-mode="hw">Height + weight</button>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mt-3 items-end">
+          <div class="field" id="bmi-field"><label for="f-bmi">BMI</label><input id="f-bmi" name="bmi" type="number" step="0.1" min="10" max="70"></div>
+          <div class="field hidden" data-hw><label for="f-height">Height (cm)</label><input id="f-height" name="height_cm" type="number" min="50" max="250"></div>
+          <div class="field hidden" data-hw><label for="f-weight">Weight (kg)</label><input id="f-weight" name="weight_kg" type="number" step="0.1" min="10" max="300"></div>
+          <div class="hidden text-[13px] pb-2" data-hw>BMI <b class="text-[var(--heading)] text-[18px]" id="bmi-auto">–</b></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mt-4">
+        <div class="field"><label for="f-activity">Activity level</label>
+          <select id="f-activity" name="activity"><option>Low</option><option>Moderate</option><option>High</option></select></div>
+        <div class="field"><label for="f-outdoor">Outdoor exposure</label>
+          <select id="f-outdoor" name="outdoor_exposure"><option>Low</option><option>Moderate</option><option>High</option></select></div>
+      </div>
+
+      <div class="mt-4">
+        <div class="text-[12px] font-semibold text-[var(--heading)]">Smoking &amp; conditions</div>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <label class="check"><input type="checkbox" name="smoking"> Smoker</label>
+          <label class="check"><input type="checkbox" name="asthma"> Asthma</label>
+          <label class="check"><input type="checkbox" name="cardiovascular_disease"> Cardiovascular disease</label>
+          <label class="check"><input type="checkbox" name="diabetes"> Diabetes</label>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 mt-5">
+        <button type="submit" class="btn-primary" id="hp-save"><i data-lucide="save"></i> Save profile</button>
+        <button type="button" class="btn-ghost" id="hp-reset">Discard changes</button>
+        <span class="text-[12px]" id="hp-status" role="status"></span>
+      </div>
+    </form>
+  {% endcall %}
+
+  <!-- Live preview -->
+  <div class="space-y-4 min-w-0">
+    <div class="panel p-4 flex gap-3 items-start" style="border-color:var(--primary)">
+      <i data-lucide="lock-keyhole" class="w-5 h-5 text-[var(--primary)] shrink-0 mt-0.5"></i>
+      <div class="text-[13px] text-[var(--heading)]"><b>Your profile is never sent to the ML model.</b>
+        It only applies small transparent rule-based adjustments (at most ±10 points per disease) after the model has produced its scores.</div>
+    </div>
+
+    {% call ui.card("How your profile affects your scores", "sliders-horizontal", cls="p-5", sub="Live preview — updates as you edit, before you save.") %}
+      <div class="mt-4 text-[12px] font-semibold text-[var(--heading)]">Rules</div>
+      <div class="mt-2 space-y-1.5" id="pv-rules">{{ ui.skeleton_lines(5) }}</div>
+      <div class="mt-5 text-[12px] font-semibold text-[var(--heading)]">Result for <span id="pv-loc">–</span> today</div>
+      <table class="tbl mt-1"><thead><tr><th>Disease</th><th>Model score</th><th>Adjustment</th><th>Final score</th></tr></thead>
+        <tbody id="pv-rows"></tbody></table>
+    {% endcall %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/my_health.js') }}"></script>
+{% endblock %}

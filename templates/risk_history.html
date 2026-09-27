@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<!-- Main trend -->
+{% call ui.card("Risk scores over time", "chart-line", cls="p-4 mt-2",
+                sub="Overall + five disease scores from the models run on the dataset's Bangladesh weeks. Click a legend entry to hide or show a series.",
+                chip_html=ui.chip("Dataset, country level", "Each point is a real dataset week for Bangladesh (country level, weekly) run through the saved models. Shaded bands mark Low (<40), Moderate (40–64) and High (≥65).")) %}
+  <div class="flex items-center justify-between mt-3 gap-3 flex-wrap">
+    <div class="seg" id="rh-range">
+      <button data-range="4w">4 weeks</button>
+      <button data-range="12w" class="active">12 weeks</button>
+      <button data-range="1y">1 year</button>
+      <button data-range="all">All (2015–2025)</button>
+    </div>
+    <div class="text-[11px]" id="rh-span"></div>
+  </div>
+  <div class="h-[320px] mt-3 relative"><canvas id="rh-chart"></canvas></div>
+{% endcall %}
+
+<div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+  <!-- Model check -->
+  {% call ui.card("Model check: predicted vs actual", "target", cls="p-4",
+                  sub="Test period only (weeks the models never saw during training or selection).") %}
+    {{ ui.tabs([("respiratory", "Respiratory"), ("vector", "Vector-borne"), ("heat", "Heat"), ("waterborne", "Waterborne"), ("cardio", "Cardiovascular")], "mc-target", cls="mt-3") }}
+    <div class="flex items-center gap-3 mt-3 flex-wrap text-[12px]" id="mc-stats"></div>
+    <div class="grid grid-cols-2 gap-3 mt-2">
+      <div><div class="text-[11px] text-[var(--muted)]">All 25 countries (sample)</div><div class="h-[220px]"><canvas id="mc-scatter"></canvas></div></div>
+      <div><div class="text-[11px] text-[var(--muted)]">Bangladesh, week by week</div><div class="h-[220px]"><canvas id="mc-series"></canvas></div></div>
+    </div>
+  {% endcall %}
+
+  <!-- Seasonality -->
+  {% call ui.card("Seasonality", "calendar-range", cls="p-4",
+                  sub="Average risk percentile of the observed weekly values, by month.") %}
+    {{ ui.tabs([("bgd", "Bangladesh"), ("all", "All 25 countries")], "ss-scope", cls="mt-3") }}
+    <div class="mt-3 overflow-x-auto" id="ss-grid">{{ ui.skeleton(200) }}</div>
+    <p class="text-[11px] mt-2" id="ss-note"></p>
+  {% endcall %}
+</div>
+
+<!-- Snapshots -->
+{% call ui.card("Last 12 snapshots", "table", cls="p-4 mt-4 mb-2", chip_html='<span class="flex items-center gap-2"><span id="snap-chip"></span><a class="btn-ghost" id="snap-csv" href="#"><i data-lucide="download"></i> Download CSV</a></span>') %}
+  <div class="overflow-x-auto mt-2">
+    <table class="tbl">
+      <thead><tr><th>Date</th><th>Source</th><th>Overall</th><th>Level</th><th>Respiratory</th><th>Vector</th><th>Heat</th><th>Waterborne</th><th>Cardio</th><th>PM2.5</th><th><span class="tip-up" data-tip="Live rows: 7-day mean from Open-Meteo. Backfill rows: the dataset week's temperature converted back to °C with the same quantile mapping the model uses — the dataset's own temperature scale is not real °C.">Temp ⓘ</span></th></tr></thead>
+      <tbody id="snap-rows"><tr><td colspan="11">{{ ui.skeleton_lines(3) }}</td></tr></tbody>
+    </table>
+  </div>
+{% endcall %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/risk_history.js') }}"></script>
+{% endblock %}

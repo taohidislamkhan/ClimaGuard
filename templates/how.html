@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% set sections = [
+  ("scope", "Problem & scope"), ("dataset", "Dataset"), ("cleaning", "Cleaning"), ("eda", "EDA"),
+  ("features", "Feature engineering"), ("split", "Chronological split"), ("models", "Model comparison"),
+  ("regressors", "Disease regressors"), ("shap", "Explainability"), ("advisory", "Advisory engine"),
+  ("limitations", "Limitations"), ("team", "Team")] %}
+{% block content %}
+<div class="grid gap-4 mt-2" style="grid-template-columns: 196px minmax(0, 1fr);">
+  <!-- sticky section nav -->
+  <nav class="section-nav card p-2 self-start sticky top-3" id="section-nav" aria-label="Sections">
+    {% for id, label in sections %}
+      <a href="#{{ id }}" data-sec="{{ id }}"><span class="text-[var(--muted)] mr-1">{{ loop.index }}.</span>{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <div class="space-y-4 min-w-0 pb-10">
+    <!-- 1 -->
+    <section class="card p-5 doc-section" id="scope">
+      <h2>1. Problem &amp; scope</h2>
+      <p class="mt-2">ClimaGuard estimates <b>regional</b> disease risk (Low / Moderate / High) from weather, air quality,
+        location and socioeconomic context. It is a <b>nowcast for a population</b>, built on weekly country-level data —
+        it does not know anything about an individual's health and is <b>not a diagnosis</b>.</p>
+      <div class="grid grid-cols-3 gap-3 mt-3">
+        <div class="panel p-3"><div class="text-[var(--heading)] font-semibold text-[13px]">Input</div><p class="text-[12px] mt-1">Weekly temperature, rainfall, heat-wave days, PM2.5, AQI, plus country context.</p></div>
+        <div class="panel p-3"><div class="text-[var(--heading)] font-semibold text-[13px]">Output</div><p class="text-[12px] mt-1">An overall risk class and five disease scores (respiratory, vector-borne, heat, waterborne, cardiovascular).</p></div>
+        <div class="panel p-3"><div class="text-[var(--heading)] font-semibold text-[13px]">Use</div><p class="text-[12px] mt-1">Public-health style guidance from a transparent rule engine — not clinical advice.</p></div>
+      </div>
+      <div class="mt-3">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis.") }}</div>
+    </section>
+
+    <!-- 2 -->
+    <section class="card p-5 doc-section" id="dataset">
+      <h2>2. Dataset</h2>
+      <p class="mt-1">Global Climate-Health Impact Tracker — one row per country per week.</p>
+      <div class="grid grid-cols-4 gap-3 mt-3">
+        {{ ui.stat("ds-rows", "weekly rows", "rows-3") }}
+        {{ ui.stat("ds-countries", "countries", "globe") }}
+        {{ ui.stat("ds-regions", "regions", "map") }}
+        {{ ui.stat("ds-cols", "raw columns", "columns-3") }}
+        {{ ui.stat("ds-range", "date range", "calendar-range") }}
+        {{ ui.stat("ds-weeks", "weeks per country", "calendar-days") }}
+        {{ ui.stat("ds-nulls", "null values", "circle-slash") }}
+        {{ ui.stat("ds-dups", "duplicate rows", "copy") }}
+      </div>
+      <p class="text-[12px] mt-3" id="ds-regions-list"></p>
+    </section>
+
+    <!-- 3 -->
+    <section class="card p-5 doc-section" id="cleaning">
+      <h2>3. Cleaning</h2>
+      <p class="mt-1">Rules from <code>pipeline/step1_clean_inspect.py</code>; counts are recomputed from the raw file.</p>
+      <table class="tbl mt-3"><thead><tr><th>Rule</th><th>Rows affected (raw)</th><th>Remaining after cleaning</th></tr></thead>
+        <tbody id="cleaning-rows"><tr><td colspan="3">{{ ui.skeleton_lines(3) }}</td></tr></tbody></table>
+    </section>
+
+    <!-- 4 -->
+    <section class="card p-5 doc-section" id="eda">
+      <h2>4. Exploratory data analysis</h2>
+      <p class="mt-1">All charts are computed from <code>data/processed/cleaned_data.csv</code>.</p>
+      <div class="grid gap-4 mt-3" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);">
+        <div class="panel p-3">
+          <div class="text-[13px] font-semibold text-[var(--heading)]">Correlation of key variables (Pearson r)</div>
+          <div id="corr" class="mt-2 overflow-x-auto">{{ ui.skeleton(260) }}</div>
+          <div class="flex items-center gap-2 text-[10.5px] mt-2"><span>−1</span><span class="h-2 flex-1 rounded" style="background:linear-gradient(90deg,#1F6FEB,var(--card-2),#E5484D)"></span><span>+1</span></div>
+        </div>
+        <div class="panel p-3">
+          <div class="text-[13px] font-semibold text-[var(--heading)]">Temperature vs heat-related admissions</div>
+          <p class="text-[11px] mt-1">1,500 sampled weeks + mean per 2° bin. The dataset's temperature column is on its own scale
+            (not real °C), so read the x-axis as "dataset temperature".</p>
+          <div class="h-[260px] mt-2"><canvas id="scatter"></canvas></div>
+        </div>
+      </div>
+      <div class="panel p-3 mt-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[13px] font-semibold text-[var(--heading)]">Seasonality (monthly mean, index: annual mean = 100)</div>
+          {{ ui.tabs([("bgd", "Bangladesh"), ("all", "All 25 countries")], "season-scope") }}
+        </div>
+        <p class="text-[11px] mt-1">The all-countries view mixes both hemispheres, which flattens seasonal peaks.</p>
+        <div class="h-[240px] mt-2"><canvas id="seasonal"></canvas></div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="card p-5 doc-section" id="features">
+      <h2>5. Feature engineering &amp; selection</h2>
+      <div class="grid gap-4 mt-3" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+        <div>
+          <div class="text-[13px] font-semibold text-[var(--heading)]">Engineered feature families (per country, weekly)</div>
+          <div class="mt-3 grid grid-cols-[48px_1fr] gap-y-2 gap-x-3 items-center text-[12px]" id="families"></div>
+          <div class="mt-3 panel p-3 text-[12px]">
+            <b class="text-[var(--heading)]">How they are built:</b> rolling mean / sum / max over 4, 8 and 12 weeks;
+            lags of 1, 2, 4 and 8 weeks (shifted so the current week never leaks); sin/cos of week and month so week 52 sits
+            next to week 1; products such as temperature × PM2.5; one-hot dummies for country, region, income and climate zone.
+          </div>
+        </div>
+        <div>
+          <div class="text-[13px] font-semibold text-[var(--heading)]">Selection funnel</div>
+          <div class="mt-3 space-y-2" id="funnel"></div>
+          <div class="text-[13px] font-semibold text-[var(--heading)] mt-4">Four selection methods</div>
+          <ol class="mt-2 space-y-1 text-[12px] list-decimal pl-5" id="methods"></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="card p-5 doc-section" id="split">
+      <h2>6. Chronological split</h2>
+      <div class="mt-4 flex h-[46px] rounded-lg overflow-hidden text-white text-[12px] font-semibold" id="timeline"></div>
+      <div class="flex justify-between text-[11px] mt-1" id="timeline-axis"></div>
+      <div class="panel p-3 mt-3 text-[12px]">
+        <b class="text-[var(--heading)]">Why not a random split?</b> Lag and rolling features copy information across
+        neighbouring weeks. With a random split, a test week's own values would appear inside the training rows' lag and
+        rolling windows, so the model would effectively see the future and the scores would be inflated. Splitting by
+        date keeps every test week strictly after everything the model was trained or tuned on.
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="card p-5 doc-section" id="models">
+      <h2>7. Model comparison — overall risk classifier</h2>
+      <p class="mt-1">Selection used the <b>validation</b> macro-F1 only; the test columns are reported, never used for choosing.</p>
+      <div class="grid gap-4 mt-3" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+        <table class="tbl self-start"><thead><tr><th>Model</th><th>Val macro-F1</th><th>Test accuracy</th><th>Test macro-F1</th><th>Test ROC-AUC</th></tr></thead>
+          <tbody id="clf-rows"></tbody></table>
+        <div class="h-[240px]"><canvas id="clf-chart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="card p-5 doc-section" id="regressors">
+      <h2>8. Disease regressors</h2>
+      <p class="mt-1">One regressor per disease, each the validation winner of four model families. R² is on the test weeks.</p>
+      <div class="grid gap-4 mt-3" style="grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);">
+        <div class="h-[250px]"><canvas id="r2-chart"></canvas></div>
+        <div class="space-y-2" id="r2-notes"></div>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section class="card p-5 doc-section" id="shap">
+      <h2>9. Explainability — global SHAP</h2>
+      <p class="mt-1">Mean |SHAP| of each <b>saved</b> model on <span id="shap-n">a sample of</span> test weeks, with engineered
+        columns grouped (e.g. all PM2.5 lags → "PM2.5"). ⟲ marks autoregressive features (past values of a disease indicator).</p>
+      <div class="grid grid-cols-3 gap-3 mt-3" id="shap-grid"></div>
+    </section>
+
+    <!-- 10 -->
+    <section class="card p-5 doc-section" id="advisory">
+      <h2>10. Advisory engine</h2>
+      <p class="mt-1">Rules and thresholds from <code>pipeline/step6_advisory.py</code>. Thresholds are percentiles of the training distribution.</p>
+      <table class="tbl mt-3"><thead><tr><th>Disease / layer</th><th>Trigger</th><th>Advisory</th><th>Actions</th></tr></thead>
+        <tbody id="adv-rows"></tbody></table>
+      <div class="mt-3">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis. General environmental health guidance only.") }}</div>
+    </section>
+
+    <!-- 11 -->
+    <section class="limitations p-5 doc-section" id="limitations">
+      <h2 class="flex items-center gap-2"><i data-lucide="triangle-alert" class="w-5 h-5 text-[var(--high)]"></i>11. Limitations</h2>
+      <ul class="list-disc pl-5 mt-2 space-y-1">
+        <li><b>Missing variables:</b> no humidity, elevation, UV, wind or confirmed case counts in the training data.</li>
+        <li><b>Country level:</b> trained on one weekly series per country; the Bangladesh division map only varies local weather.</li>
+        <li><b>Weekly resolution:</b> the models see 7-day aggregates, not daily or hourly conditions.</li>
+        <li><b>Dataset scales:</b> the dataset's temperature is not real °C, so live temperature is quantile-mapped.</li>
+        <li><b>Frozen inputs:</b> past disease counts (autoregressive features) stop at the dataset's last week.</li>
+        <li><b>Cardiovascular:</b> no predictive skill (test R² <span id="lim-cardio">≈ 0</span>).</li>
+        <li><b>Prototype only — not a clinical tool.</b> Do not use it for medical decisions.</li>
+      </ul>
+    </section>
+
+    <!-- 12 -->
+    <section class="card p-5 doc-section" id="team">
+      <h2>12. Team</h2>
+      <div class="flex flex-wrap items-center gap-3 mt-3">
+        <div class="panel px-4 py-3"><div class="text-[11px] text-[var(--muted)]">Team</div><div class="font-semibold text-[var(--heading)]">Phoenix Force</div></div>
+        {% for m in ["Sayma Talukder Rupa", "Md. Taohid Islam Khan Tazim", "Farhan Tariq Jamee"] %}
+          <div class="panel px-4 py-3 flex items-center gap-2"><i data-lucide="user-round" class="w-4 h-4 text-[var(--primary)]"></i><span class="text-[var(--heading)] text-[13px]">{{ m }}</span></div>
+        {% endfor %}
+      </div>
+      <p class="mt-3">Course: <b>Data Analytics Laboratory</b>, Summer 2026, United International University (UIU).</p>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/how.js') }}"></script>
+{% endblock %}

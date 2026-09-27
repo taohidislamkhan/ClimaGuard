@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<div class="grid gap-4 mt-2" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);">
+  {% call ui.card("Preferences", "sliders-horizontal", cls="p-5", sub="Changes save immediately to the local ClimaGuard server (SQLite). Nothing is stored in the browser.",
+                  chip_html='<span class="text-[12px]" id="st-status" role="status"></span>') %}
+    <div class="divide-y divide-[color:var(--border-soft)] mt-2">
+      <div class="flex items-center justify-between py-4 gap-4">
+        <div><div class="text-[13px] font-semibold text-[var(--heading)]">Temperature units</div>
+             <div class="text-[11.5px]">Used on every page. Data are stored in °C.</div></div>
+        <div class="seg" data-setting="units"><button data-value="C">°C</button><button data-value="F">°F</button></div>
+      </div>
+      <div class="flex items-center justify-between py-4 gap-4">
+        <div><div class="text-[13px] font-semibold text-[var(--heading)]">Theme</div>
+             <div class="text-[11.5px]">Risk colours stay identical in both themes.</div></div>
+        <div class="seg" data-setting="theme"><button data-value="light"><i data-lucide="sun" class="inline w-3.5 h-3.5"></i> Light</button><button data-value="dark"><i data-lucide="moon" class="inline w-3.5 h-3.5"></i> Dark</button></div>
+      </div>
+      <div class="flex items-center justify-between py-4 gap-4">
+        <div><div class="text-[13px] font-semibold text-[var(--heading)]">Default location</div>
+             <div class="text-[11.5px]">Used when a page is opened without a <code>?loc=</code> selection.</div></div>
+        <div class="field w-[220px]"><select id="st-default-loc" aria-label="Default location">
+          {% for d in divisions %}<option>{{ d }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="flex items-center justify-between py-4 gap-4">
+        <div><div class="text-[13px] font-semibold text-[var(--heading)]">Data refresh interval</div>
+             <div class="text-[11.5px]">How long live weather and model results are cached before a background refresh.</div></div>
+        <div class="seg" data-setting="refresh_minutes"><button data-value="15">15 min</button><button data-value="30">30 min</button><button data-value="60">60 min</button></div>
+      </div>
+      <div class="py-4">
+        <div class="flex items-center gap-2">
+          <div class="text-[13px] font-semibold text-[var(--heading)]">Notifications</div>
+          {{ ui.chip("UI only", "Preferences are saved, but ClimaGuard does not send notifications. The only effect is the red dot on the bell when any disease is High.") }}
+        </div>
+        <div class="grid gap-2 mt-3">
+          <label class="check"><input type="checkbox" data-notify="any_high"> Notify when any disease is High (shows the bell dot)</label>
+          <label class="check"><input type="checkbox" data-notify="air_quality"> Notify when air quality is unhealthy for sensitive groups</label>
+          <label class="check"><input type="checkbox" data-notify="daily_summary"> Daily summary</label>
+        </div>
+      </div>
+    </div>
+  {% endcall %}
+
+  {% call ui.card("About", "info", cls="p-5") %}
+    <dl class="grid grid-cols-[150px_1fr] gap-y-2.5 gap-x-3 mt-4 text-[12.5px]" id="about">
+      {{ ui.skeleton_lines(6) }}
+    </dl>
+    <div class="mt-4 text-[12px] font-semibold text-[var(--heading)]">Models</div>
+    <table class="tbl mt-1"><thead><tr><th>Task</th><th>Model</th><th>File</th><th>Size</th></tr></thead>
+      <tbody id="about-models"></tbody></table>
+    <div class="mt-4">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis.", "about-disclaimer") }}</div>
+  {% endcall %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

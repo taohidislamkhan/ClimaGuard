@@ -1,0 +1,79 @@
+{# Reusable UI macros. Import with:
+     {% import "components/ui.html" as ui %}                                 #}
+
+{# Small info chip with a hover tooltip (e.g. "Demo Data ⓘ"). #}
+{% macro chip(text, tip, id=None, cls="") -%}
+  <span class="chip {{ cls }}" data-tip="{{ tip }}" {% if id %}id="{{ id }}"{% endif %}>{{ text }} <i data-lucide="info"></i></span>
+{%- endmacro %}
+
+{# Risk badge; level is Low / Moderate / High (or filled in by JS via id). #}
+{% macro badge(level="", id=None, cls="") -%}
+  <span class="badge {% if level %}lvl-{{ level }}{% endif %} {{ cls }}" {% if id %}id="{{ id }}"{% endif %}>{{ level or "–" }}</span>
+{%- endmacro %}
+
+{# Card shell with a title row. Use with {% call ui.card(...) %}body{% endcall %}. #}
+{% macro card(title="", icon=None, id=None, cls="", chip_html="", sub=None) -%}
+  <section class="card {{ cls }}" {% if id %}id="{{ id }}"{% endif %}>
+    {% if title %}
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div class="min-w-0">
+        <h3 class="card-title flex items-center gap-2">
+          {% if icon %}<i data-lucide="{{ icon }}" class="w-4 h-4 text-[var(--primary)] shrink-0"></i>{% endif %}{{ title }}
+        </h3>
+        {% if sub %}<p class="card-sub mt-[4px]">{{ sub }}</p>{% endif %}
+      </div>
+      {{ chip_html | safe }}
+    </div>
+    {% endif %}
+    {{ caller() }}
+  </section>
+{%- endmacro %}
+
+{# Pill tabs. items: list of (key, label). #}
+{% macro tabs(items, id, active=None, cls="") -%}
+  <div class="flex flex-wrap gap-[6px] {{ cls }}" id="{{ id }}" role="tablist">
+    {% for key, label in items %}
+      <button class="tab {% if (active or items[0][0]) == key %}active{% endif %}" data-key="{{ key }}" role="tab">{{ label }}</button>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{# Gauge: a Chart.js doughnut with the score in the middle. #}
+{% macro gauge(id, size=140, caption=None) -%}
+  <div class="flex flex-col items-center">
+    <div class="relative" style="width:{{ size }}px;height:{{ size }}px">
+      <canvas id="{{ id }}" width="{{ size }}" height="{{ size }}"></canvas>
+      <div class="absolute inset-0 flex flex-col items-center justify-center">
+        <div class="font-bold text-[var(--heading)] leading-none" style="font-size:{{ (size * 0.26) | int }}px" id="{{ id }}-score" data-skel>–</div>
+        <div class="text-[12px] mt-1">/ 100</div>
+      </div>
+    </div>
+    {% if caption %}<div class="text-[13px] font-semibold text-[var(--heading)] mt-2">{{ caption }}</div>{% endif %}
+  </div>
+{%- endmacro %}
+
+{# Skeleton placeholder block. #}
+{% macro skeleton(h=16, w="100%", cls="") -%}
+  <div class="skeleton-block {{ cls }}" style="height:{{ h }}px;width:{{ w }}"></div>
+{%- endmacro %}
+
+{# Several skeleton lines, used as the initial content of a data slot. #}
+{% macro skeleton_lines(n=4, h=12) -%}
+  <div class="space-y-2">{% for i in range(n) %}{{ skeleton(h, ["100%", "92%", "80%", "96%"][i % 4]) }}{% endfor %}</div>
+{%- endmacro %}
+
+{# Red-bordered disclaimer / warning box. #}
+{% macro disclaimer(text, id=None) -%}
+  <div class="disclaimer flex gap-2 items-start text-[11.5px]" {% if id %}id="{{ id }}"{% endif %}>
+    <i data-lucide="shield-alert" class="w-4 h-4 shrink-0 mt-[1px]"></i><span>{{ text }}</span>
+  </div>
+{%- endmacro %}
+
+{# Stat tile: big number + label. #}
+{% macro stat(id, label, icon=None) -%}
+  <div class="stat-tile">
+    {% if icon %}<i data-lucide="{{ icon }}" class="w-4 h-4 text-[var(--primary)]"></i>{% endif %}
+    <div class="stat-value" id="{{ id }}" data-skel>–</div>
+    <div class="stat-label">{{ label }}</div>
+  </div>
+{%- endmacro %}

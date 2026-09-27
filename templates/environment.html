@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<!-- Current conditions -->
+{% call ui.card("Current conditions", "cloud-sun", cls="p-4 mt-2",
+                sub="Live Open-Meteo values. Status colours use real-world scales (US EPA, WHO, NOAA, BMD), not model output.",
+                chip_html='<span class="text-[11px]" id="env-observed"></span>') %}
+  <div class="grid grid-cols-5 gap-3 mt-3" id="env-tiles">
+    {% for i in range(10) %}<div class="panel p-3 h-[132px]">{{ ui.skeleton_lines(4) }}</div>{% endfor %}
+  </div>
+  <p class="text-[11px] mt-3">
+    <span class="chip !cursor-default">Used by model</span> the model receives this variable as a 7-day aggregate (shown on the tile).
+    <span class="chip !cursor-default ml-2" style="background:var(--border-soft);color:var(--body)">Display only</span> shown for context; not a model input.
+  </p>
+{% endcall %}
+
+<div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+  {% call ui.card("Next 7 days", "calendar-days", cls="p-4", sub="Daily max/min temperature band and rainfall (Open-Meteo forecast).") %}
+    <div class="h-[260px] mt-3 relative" id="fc-wrap"><canvas id="fc-chart"></canvas></div>
+  {% endcall %}
+  {% call ui.card("Air quality — next 72 hours", "wind", cls="p-4", sub="Hourly PM2.5 and US AQI forecast with guideline thresholds.") %}
+    <div class="h-[260px] mt-3 relative" id="aq-wrap"><canvas id="aq-chart"></canvas></div>
+  {% endcall %}
+</div>
+
+{% call ui.card("Heat-wave watch", "flame", cls="p-4 mt-4 mb-2",
+                chip_html=ui.chip("Threshold", "A day counts as a heat-wave day when its maximum temperature exceeds the 95th percentile of Dhaka's 2015–2024 daily maxima (Open-Meteo archive). The same rule produces the heat-wave feature the model receives.")) %}
+  <div class="flex items-center gap-6 mt-3" id="hw-box">{{ ui.skeleton(60, "100%") }}</div>
+{% endcall %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/environment.js') }}"></script>
+{% endblock %}

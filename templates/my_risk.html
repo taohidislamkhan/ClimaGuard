@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<!-- Top: overall summary -->
+<section class="card mt-2 px-5 py-4 flex items-center gap-6">
+  {{ ui.gauge("mr-gauge", 112) }}
+  <div class="flex-1 min-w-0">
+    <div class="flex items-center gap-2 flex-wrap">
+      <h2 class="text-[16px] font-semibold text-[var(--heading)]">Overall environmental risk</h2>
+      <span id="mr-badge" class="badge" data-skel>–</span>
+    </div>
+    <p class="text-[13px] mt-2 max-w-[640px]" id="mr-summary" data-skel>Loading the latest estimate…</p>
+    <p class="text-[11px] mt-1 text-[var(--muted)]" id="mr-updated"></p>
+  </div>
+  <div class="w-[300px] shrink-0">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis. Scores describe regional conditions, not your personal health.", "mr-disclaimer") }}</div>
+</section>
+
+<!-- Disease tabs -->
+<div class="flex flex-wrap gap-2 mt-4" id="disease-tabs" role="tablist">
+  {% for key, label in [("respiratory", "Respiratory"), ("vector", "Vector-borne"), ("heat", "Heat-related"), ("waterborne", "Waterborne"), ("cardio", "Cardiovascular")] %}
+    <button class="tab tab-lg" data-key="{{ key }}" role="tab">{{ label }} <span class="badge !h-[18px] !px-[6px] !text-[10px]" data-tab-score="{{ key }}">–</span></button>
+  {% endfor %}
+</div>
+
+<div class="grid gap-4 mt-3" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);">
+  <div class="space-y-4 min-w-0">
+    <!-- Score breakdown -->
+    {% call ui.card("Score breakdown", "calculator", cls="p-4", sub="Model score first, then the transparent profile rules.") %}
+      <div class="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 mt-4 text-center">
+        <div class="panel py-3"><div class="text-[11px]">Model score</div><div class="text-[26px] font-bold text-[var(--heading)]" id="sb-model" data-skel>–</div><div id="sb-model-band"></div></div>
+        <div class="text-[20px] text-[var(--muted)]">+</div>
+        <div class="panel py-3"><div class="text-[11px]">Profile adjustment</div><div class="text-[26px] font-bold text-[var(--heading)]" id="sb-adj" data-skel>–</div><div class="text-[10.5px] h-[21px] leading-[21px]" id="sb-cap">max ±10</div></div>
+        <div class="text-[20px] text-[var(--muted)]">=</div>
+        <div class="panel py-3"><div class="text-[11px]">Final score</div><div class="text-[26px] font-bold text-[var(--heading)]" id="sb-final" data-skel>–</div><div id="sb-final-band"></div></div>
+      </div>
+      <div class="mt-3 text-[12px]" id="sb-rules"></div>
+      <p class="text-[11px] mt-2 text-[var(--muted)]" id="sb-pred"></p>
+    {% endcall %}
+
+    <!-- Reliability -->
+    {% call ui.card("Model reliability", "badge-check", cls="p-4", sub="Test R² on 2024–2025 weeks the model never saw.") %}
+      <div class="flex items-center gap-3 mt-3 flex-wrap">
+        <div class="text-[26px] font-bold text-[var(--heading)]" id="rel-r2" data-skel>–</div>
+        <span id="rel-badge" class="badge">–</span>
+        <span class="text-[11.5px]" id="rel-model"></span>
+      </div>
+      <p class="text-[12px] mt-2 leading-snug" id="rel-text"></p>
+    {% endcall %}
+
+    <!-- Sparkline -->
+    {% call ui.card("Last 8 snapshots", "activity", cls="p-4", chip_html='<span id="spark-chip"></span>') %}
+      <div class="h-[90px] mt-3"><canvas id="mr-spark"></canvas></div>
+      <div class="flex justify-between text-[10.5px] mt-1" id="spark-axis"></div>
+    {% endcall %}
+  </div>
+
+  <div class="space-y-4 min-w-0">
+    <!-- Local SHAP -->
+    {% call ui.card("What drives this score today", "chart-bar-big", cls="p-4",
+                    chip_html=ui.chip("Local SHAP", "Real local SHAP values of this disease's own model for today's feature row (TreeExplainer for tree models, exact linear SHAP for ElasticNet). Engineered columns are grouped. Red raises the predicted value, green lowers it. ⟲ = autoregressive feature (past values of this indicator).")) %}
+      <p class="card-sub mt-1" id="shap-sub">Top 8 grouped features.</p>
+      <div class="h-[300px] mt-3 relative"><canvas id="mr-shap"></canvas></div>
+      <div class="flex gap-4 text-[11px] mt-2">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:var(--high)"></span>raises the prediction</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:var(--low)"></span>lowers the prediction</span>
+      </div>
+    {% endcall %}
+
+    <!-- Advisory -->
+    {% call ui.card("Advisory actions", "bell", cls="p-4", chip_html=ui.chip("Rule engine", "From pipeline/step6_advisory.py. A disease advisory fires when its model score is in the top 20% of training weeks.")) %}
+      <div class="mt-3" id="adv-box"></div>
+      <div class="mt-3">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis. General environmental health guidance — for medical concerns, consult a qualified healthcare professional.") }}</div>
+    {% endcall %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/my_risk.js') }}"></script>
+{% endblock %}

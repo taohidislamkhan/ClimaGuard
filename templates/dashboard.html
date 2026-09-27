@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<!-- Row 1: hero -->
+<section class="relative mt-[16px]">
+  <button id="recalc" class="btn-primary absolute -top-[16px] right-0 z-20">
+    <i data-lucide="refresh-cw"></i> Recalculate Risk
+  </button>
+  <div class="card hero relative h-[205px] flex items-stretch">
+    <img src="{{ url_for('static', filename='img/skyline.svg') }}" class="skyline" alt="">
+    <div class="absolute left-[18px] top-[18px] w-[34px] h-[26px] rounded-md bg-[var(--chip-bg)] opacity-70"></div>
+    <!-- gauge -->
+    <div class="w-[234px] shrink-0 flex flex-col items-center justify-center pl-2 pt-2">
+      <div class="relative w-[140px] h-[140px]">
+        <canvas id="gauge" width="142" height="142"></canvas>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <div class="text-[36px] font-bold text-[var(--heading)] leading-none" id="overall-score">–</div>
+          <div class="text-[13px] mt-1">/ 100</div>
+        </div>
+      </div>
+      <div class="text-[14px] font-semibold text-[var(--heading)] mt-3">Environmental Risk Score</div>
+    </div>
+    <!-- text -->
+    <div class="pt-[18px] pl-0 flex-1 min-w-0 max-w-[520px] relative z-10">
+      <h2 class="text-[17px] font-semibold text-[var(--heading)]">Your Environmental Health Risk</h2>
+      <div class="mt-2 flex items-center gap-2">
+        <span id="overall-badge" class="badge !h-[24px] !px-[11px] !text-[12px]">–</span>
+      </div>
+      <div class="mt-[10px] text-[12.5px] flex items-center gap-1.5" id="overall-change">&nbsp;</div>
+      <p class="mt-[10px] text-[12.5px] leading-[1.35] max-w-[290px]" id="overall-explain">&nbsp;</p>
+      <a href="/my-risk" data-keep-loc class="btn-secondary mt-[10px]">View Detailed Analysis <i data-lucide="arrow-right"></i></a>
+    </div>
+    <!-- disclaimer + updated: one stacked column below the Recalculate button -->
+    <div class="ml-auto shrink-0 w-[236px] pt-[30px] pr-[16px] flex flex-col items-end gap-[8px] relative z-10">
+      <div class="flex gap-2 text-[11px] leading-[1.35] text-left hero-note rounded-md px-2 py-1">
+        <i data-lucide="info" class="w-[14px] h-[14px] fill-[var(--body)] text-[var(--card)] shrink-0 mt-[1px]"></i>
+        <span id="disclaimer">This is an environmental risk estimate, not a medical diagnosis.</span>
+      </div>
+      <div class="flex items-center gap-1.5 text-[10.5px] whitespace-nowrap">
+        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Last updated: <span id="last-updated">–</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Row 2: disease cards -->
+<section class="grid grid-cols-5 gap-[14px] mt-[13px]" id="disease-cards"></section>
+
+<!-- Row 3 -->
+<section class="grid gap-[14px] mt-[13px] row3">
+  <div class="card px-[12px] pt-[12px] pb-[10px] min-h-[240px]" id="why">
+    <div class="flex items-start justify-between">
+      <div>
+        <h3 class="card-title">Why is your risk elevated?</h3>
+        <p class="card-sub mt-[5px]">Top environmental factors behind today's estimate (<span id="why-model">overall model</span>).</p>
+      </div>
+      <span class="chip" data-tip="Real local SHAP values of the overall classifier (exact linear SHAP, High-class logit) for today's feature row. Engineered columns are grouped (e.g. all PM2.5 lags → PM2.5). Bar = |SHAP| scaled so the strongest factor is 100; arrow shows whether it raises or lowers risk. Humidity is not a model feature.">SHAP explanation <i data-lucide="info"></i></span>
+    </div>
+    <div class="mt-[16px] space-y-[9px] bar-list" id="factors"></div>
+  </div>
+
+  <div class="card px-[13px] pt-[12px] pb-[10px] min-h-[240px]">
+    <h3 class="card-title">Current Environment</h3>
+    <div class="flex items-center gap-1.5 text-[11px] mt-[6px]"><i data-lucide="map-pin" class="w-3.5 h-3.5 fill-[var(--heading)] text-[var(--card)]"></i><span id="env-loc">–</span></div>
+    <div class="grid grid-cols-3 gap-y-[10px] mt-[12px]" id="env-grid"></div>
+    <div class="flex items-end justify-between mt-[10px] gap-2">
+      <div id="env-uv"></div>
+      <div id="aqi-callout" class="rounded-md px-3 py-[6px] flex items-center gap-2 text-[10.5px] w-[186px]"></div>
+    </div>
+  </div>
+
+  <div class="card px-[14px] pt-[12px] pb-[8px] min-h-[240px] flex flex-col">
+    <div class="flex items-start justify-between">
+      <div>
+        <h3 class="card-title">Your 7-Day Risk Trend</h3>
+        <p class="card-sub mt-[5px]">Environmental risk estimate over the last 7 snapshots.</p>
+      </div>
+      <span id="trend-chip"></span>
+    </div>
+    <div class="flex flex-wrap gap-[6px] mt-[10px]" id="trend-tabs">
+      <button class="tab active" data-key="overall">Overall</button>
+      <button class="tab" data-key="respiratory">Respiratory</button>
+      <button class="tab" data-key="heat">Heat</button>
+      <button class="tab" data-key="vector">Vector</button>
+      <button class="tab" data-key="waterborne">Waterborne</button>
+    </div>
+    <div class="relative w-full h-[132px] mt-2"><canvas id="trend-chart"></canvas></div>
+  </div>
+</section>
+
+<!-- Row 4 -->
+<section class="grid gap-[12px] mt-[13px] row4">
+  <div class="card px-[12px] pt-[10px] pb-[8px] min-h-[223px] flex flex-col">
+    <div class="flex items-center justify-between">
+      <h3 class="card-title flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4 text-[#F5A524] fill-[#F5A524]"></i>Today's Advisories</h3>
+      <span class="chip" data-tip="Generated by the project's rule engine (pipeline/step6_advisory.py): a disease rule fires when its model score is in the top 20% of training weeks; the overall layer follows the classifier's predicted class.">Rule engine <i data-lucide="info"></i></span>
+    </div>
+    <div class="mt-[8px] space-y-[6px] overflow-y-auto scroll-thin flex-1 pr-1 max-h-[140px]" id="advisories"></div>
+    <div class="text-[9px] text-[var(--muted)] leading-snug mt-[6px] pt-[5px] border-t border-[color:var(--border-soft)]" id="adv-footer"></div>
+  </div>
+
+  <div class="card px-[13px] pt-[10px] pb-[8px] min-h-[223px]">
+    <div class="flex flex-wrap items-center justify-between gap-1">
+      <h3 class="card-title flex items-center gap-2 whitespace-nowrap"><i data-lucide="chart-no-axes-combined" class="w-4 h-4 text-[var(--primary)] shrink-0"></i>What Changed Today?</h3>
+      <span id="changes-chip"></span>
+    </div>
+    <p class="text-[11.5px] mt-[16px] leading-snug text-[var(--heading)]" id="changes-text">–</p>
+    <div class="text-[11px] mt-[20px]">Main contributors:</div>
+    <div class="mt-[8px] space-y-[11px]" id="contributors"></div>
+  </div>
+
+  <div class="card px-[12px] pt-[10px] pb-[10px] min-h-[223px] flex flex-col">
+    <div class="flex items-center justify-between">
+      <h3 class="card-title flex items-center gap-2"><i data-lucide="chart-no-axes-column" class="w-4 h-4 text-[var(--primary)]"></i>Environmental Risk Map</h3>
+      <span class="chip" data-tip="Each dot runs the models on live Open-Meteo weather at that division's coordinates. The models were trained at COUNTRY level (Bangladesh), so division differences come only from local weather, not from division-level health data.">Demo Data <i data-lucide="info"></i></span>
+    </div>
+    <div class="flex gap-[12px] mt-[6px] flex-1 min-h-0">
+      <div id="mini-map" class="rounded-md flex-1 min-w-0"></div>
+      <div class="w-[165px] 2xl:w-[190px] shrink-0 flex flex-col justify-between">
+        <div class="space-y-[2px] pt-[4px] text-[10.5px]" id="map-legend"></div>
+        <a href="/risk-map" data-keep-loc class="btn-secondary self-end !h-[26px] !text-[11px]">Open Full Map <i data-lucide="arrow-right"></i></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Row 5: profile -->
+<section class="card mt-[12px] px-[14px] pt-[7px] pb-[6px]">
+  <h3 class="card-title flex items-center gap-2"><i data-lucide="user-round-check" class="w-4 h-4 text-[var(--primary)]"></i>Your Health Profile</h3>
+  <div class="flex items-center justify-between mt-[4px]">
+    <div class="grid grid-cols-6 flex-1 pl-[14px]" id="profile-strip"></div>
+    <a href="/my-health" data-keep-loc id="open-profile" class="btn-secondary !h-[26px] !text-[11px]">Update Profile <i data-lucide="arrow-right"></i></a>
+  </div>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

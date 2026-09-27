@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-theme="{{ settings.theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ page_title }} · ClimaGuard{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  {% block head %}{% endblock %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script>
+    window.APP = {{ {"settings": settings, "divisions": divisions, "page": active} | tojson }};
+  </script>
+</head>
+<body class="min-h-screen">
+<div class="flex min-h-screen">
+  <!-- Sidebar (collapses to icons below 1280px) -->
+  <aside class="sidebar fixed inset-y-0 left-0 flex flex-col z-40">
+    <a href="/" data-keep-loc class="brand flex items-center gap-2.5 px-4 pt-4 pb-4">
+      <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true" class="shrink-0">
+        <defs>
+          <linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#3FB6E8"/><stop offset="1" stop-color="#1673C8"/>
+          </linearGradient>
+        </defs>
+        <circle cx="21" cy="22" r="15" fill="url(#lg1)"/>
+        <path d="M9 21c4-1 6 2 9 1s4-5 8-4 3 5 7 5" stroke="#8FE0B8" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M27 14a7 7 0 0 1 13 3 5 5 0 0 1 1 10H27a5 5 0 0 1 0-10z" fill="#E8F6FF"/>
+        <path d="M20 38c0-4 2-6 4-6s4 2 4 6" fill="#4CC38A"/>
+        <circle cx="24" cy="28.5" r="2.4" fill="#4CC38A"/>
+      </svg>
+      <div class="nav-text">
+        <div class="text-[18.5px] font-semibold leading-tight tracking-tight">ClimaGuard</div>
+        <div class="text-[10.5px] text-white/75 mt-0.5 whitespace-nowrap">Environmental Health Intelligence</div>
+      </div>
+    </a>
+    <nav class="flex-1">
+      {% set groups = [['dashboard','my_risk','environment','risk_map','risk_history'], ['my_health','how'], ['settings']] %}
+      {% set icons = {'dashboard':'house','my_risk':'chart-column','environment':'cloud','risk_map':'map','risk_history':'history','my_health':'user-round','how':'lightbulb','settings':'settings'} %}
+      {% for g in groups %}
+        {% if not loop.first %}<div class="nav-divider"></div>{% endif %}
+        {% for key in g %}
+          <a href="{{ pages[key][0] }}" data-keep-loc title="{{ pages[key][1] }}"
+             class="nav-item {% if active == key %}active{% endif %}" {% if active == key %}aria-current="page"{% endif %}>
+            <i data-lucide="{{ icons[key] }}"></i><span class="nav-text">{{ pages[key][1] }}</span>
+          </a>
+        {% endfor %}
+      {% endfor %}
+    </nav>
+    <div class="px-5 pb-5 nav-footer">
+      <div class="nav-divider !mx-0 !mb-4"></div>
+      <div class="flex items-center gap-2 text-[12.5px] font-medium">
+        <span id="sys-dot" class="w-2.5 h-2.5 rounded-full bg-[#22C55E] shrink-0"></span>
+        <span id="sys-status" class="nav-text">System Online</span>
+      </div>
+      <div class="mt-3 pl-1 text-[11px] text-white/75 leading-relaxed nav-text">
+        <div class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-white/50"></span>Data updated</div>
+        <div class="pl-3" id="side-updated">—</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main flex-1 px-[17px] pb-[8px] min-w-0">
+    <header class="flex items-start justify-between pt-[18px] min-h-[70px] gap-4">
+      <div class="min-w-0">
+        {% if active == 'dashboard' %}
+          <h1 class="text-[21px] font-semibold text-[var(--heading)] leading-tight" id="greeting">Good evening 👋</h1>
+        {% else %}
+          <h1 class="text-[21px] font-semibold text-[var(--heading)] leading-tight">{{ page_title }}</h1>
+        {% endif %}
+        <p class="text-[13.5px] mt-1">{{ page_subtitle }}</p>
+      </div>
+      <div class="flex items-center gap-6 pr-4 shrink-0">
+        <label class="flex items-center gap-3 cursor-pointer" title="Location (shared by all pages)">
+          <i data-lucide="map-pin" class="w-5 h-5 text-[var(--primary)]"></i>
+          <span class="leading-tight">
+            <select id="loc-select" class="loc-select text-[13px] font-semibold text-[var(--heading)]" aria-label="Location">
+              {% for d in divisions %}<option value="{{ d }}">{{ d }}, Bangladesh</option>{% endfor %}
+            </select>
+            <span class="block text-[12px] mt-0.5" id="hdr-date">—</span>
+          </span>
+        </label>
+        <button class="relative ml-3 text-[var(--heading)]" aria-label="Notifications" id="bell"
+                data-tip="Notifications are a UI preview only.">
+          <i data-lucide="bell" class="w-[21px] h-[21px]"></i>
+          <span id="bell-dot" class="hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#E5484D] ring-2 ring-[var(--bg)]"></span>
+        </button>
+        <a href="/my-health" data-keep-loc class="flex items-center gap-2.5" id="avatar-btn">
+          <span class="w-[33px] h-[33px] rounded-full bg-[#0E4C7A] text-white grid place-items-center font-semibold text-[14px]" id="avatar-initial">·</span>
+          <span class="text-[13px] font-semibold text-[var(--heading)]" id="avatar-name">—</span>
+          <i data-lucide="chevron-down" class="w-4 h-4"></i>
+        </a>
+      </div>
+    </header>
+
+    <div id="fallback-banner" class="hidden banner-fallback rounded-lg px-4 py-2 mb-2 text-[12px] flex items-center gap-2">
+      <i data-lucide="cloud-off" class="w-4 h-4"></i>
+      <span>Using last available data — live weather is unreachable, so values come from the latest dataset week (<b id="fallback-date"></b>).</span>
+    </div>
+    <div id="page-error" class="hidden"></div>
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components.js') }}"></script>
+{% block scripts %}{% endblock %}
+<script>lucide.createIcons();</script>
+</body>
+</html>

@@ -73,3 +73,10 @@ _as*.json
 _shap_*
 _*.py
 _p.txt
+
+# --- Flask dashboard runtime state ---
+data/cache/risk_history.db
+
+# --- Large local-only files (exceed GitHub 100 MB limit) ---
+.puku/
+models/model.pkl

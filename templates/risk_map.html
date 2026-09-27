@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div class="card relative mt-2 overflow-hidden" style="height: calc(100vh - 108px); min-height: 560px;">
+  <div id="rm-map" class="absolute inset-0"></div>
+
+  <!-- floating control panel (top-left) -->
+  <div class="map-float card absolute top-3 left-3 z-[500] p-3 w-[300px]">
+    <div class="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">View</div>
+    <div class="seg mt-1.5 w-full" id="rm-view">
+      <button class="active flex-1 whitespace-nowrap !px-2" data-view="division">Divisions · live</button>
+      <button class="flex-1 whitespace-nowrap !px-2" data-view="country">Countries · dataset</button>
+    </div>
+    <div class="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] mt-3">Layer</div>
+    {{ ui.tabs([("overall", "Overall"), ("respiratory", "Respiratory"), ("vector", "Vector-borne"), ("heat", "Heat"), ("waterborne", "Waterborne"), ("cardio", "Cardiovascular")], "rm-layer", cls="mt-1.5") }}
+    <div id="rm-week-box" class="hidden mt-3">
+      <div class="flex items-center justify-between text-[11px]">
+        <span class="font-semibold uppercase tracking-wide text-[var(--muted)]">Test week</span>
+        <span class="font-semibold text-[var(--heading)]" id="rm-week-label">–</span>
+      </div>
+      <input type="range" id="rm-week" class="w-full mt-1 accent-[var(--primary)]" min="0" max="0" value="0" aria-label="Test week">
+      <div class="flex justify-between text-[10px] text-[var(--muted)]" id="rm-week-ends"></div>
+    </div>
+    <div class="mt-3 flex items-center gap-2 flex-wrap" id="rm-source">
+      <span id="rm-chip">{{ ui.chip("Demo Data", "Model trained on country-level data; division values use live local weather with country context.") }}</span>
+      <span class="text-[10.5px]" id="rm-source-text">Live Open-Meteo weather per division</span>
+    </div>
+  </div>
+
+  <!-- legend (bottom-right) -->
+  <div class="map-float card absolute bottom-3 right-3 z-[500] px-3 py-2 text-[11px]" id="rm-legend">
+    <div class="font-semibold text-[var(--heading)] mb-1" id="rm-legend-title">Overall risk</div>
+    <div class="flex items-center gap-3">
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:var(--low)"></span>Low</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:var(--moderate)"></span>Moderate</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:var(--high)"></span>High</span>
+      <span class="flex items-center gap-1.5 hidden" id="rm-legend-na"><span class="w-3 h-3 rounded-sm" style="background:var(--map-fill)"></span>Not in dataset</span>
+    </div>
+  </div>
+
+  <!-- side drawer -->
+  <aside class="drawer card !rounded-none !border-y-0 !border-r-0 p-4 overflow-y-auto scroll-thin" id="rm-drawer" aria-hidden="true">
+    <div class="flex items-start justify-between gap-2">
+      <div>
+        <div class="text-[11px] uppercase tracking-wide text-[var(--muted)]" id="dr-kind">Division</div>
+        <h3 class="text-[17px] font-semibold text-[var(--heading)]" id="dr-name">–</h3>
+        <div class="text-[11px]" id="dr-source"></div>
+      </div>
+      <button class="text-[var(--muted)]" id="dr-close" aria-label="Close"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div id="dr-body" class="mt-3"></div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/risk_map.js') }}"></script>
+{% endblock %}
