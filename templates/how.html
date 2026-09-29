@@ -3,7 +3,8 @@
 {% set sections = [
   ("scope", "Problem & scope"), ("dataset", "Dataset"), ("cleaning", "Cleaning"), ("eda", "EDA"),
   ("features", "Feature engineering"), ("split", "Chronological split"), ("models", "Model comparison"),
-  ("regressors", "Disease regressors"), ("shap", "Explainability"), ("advisory", "Advisory engine"),
+  ("regressors", "Disease regressors"), ("shap", "Explainability"), ("health", "Model health / drift"),
+  ("advisory", "Advisory engine"),
   ("limitations", "Limitations"), ("team", "Team")] %}
 {% block content %}
 <div class="grid gap-4 mt-2" style="grid-template-columns: 196px minmax(0, 1fr);">
@@ -49,7 +50,7 @@
     <!-- 3 -->
     <section class="card p-5 doc-section" id="cleaning">
       <h2>3. Cleaning</h2>
-      <p class="mt-1">Rules from <code>pipeline/step1_clean_inspect.py</code>; counts are recomputed from the raw file.</p>
+      <p class="mt-1">Rules from <code>src/core/cleaning.py</code> (DVC stage <code>prepare</code>); counts are recomputed from the raw file.</p>
       <table class="tbl mt-3"><thead><tr><th>Rule</th><th>Rows affected (raw)</th><th>Remaining after cleaning</th></tr></thead>
         <tbody id="cleaning-rows"><tr><td colspan="3">{{ ui.skeleton_lines(3) }}</td></tr></tbody></table>
     </section>
@@ -57,7 +58,7 @@
     <!-- 4 -->
     <section class="card p-5 doc-section" id="eda">
       <h2>4. Exploratory data analysis</h2>
-      <p class="mt-1">All charts are computed from <code>data/processed/cleaned_data.csv</code>.</p>
+      <p class="mt-1">All charts are computed from <code>data/interim/clean.parquet</code>.</p>
       <div class="grid gap-4 mt-3" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);">
         <div class="panel p-3">
           <div class="text-[13px] font-semibold text-[var(--heading)]">Correlation of key variables (Pearson r)</div>
@@ -146,17 +147,28 @@
     </section>
 
     <!-- 10 -->
+    <section class="card p-5 doc-section" id="health">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <h2>10. Model health / drift</h2>
+        <span id="health-status"></span>
+      </div>
+      <p class="mt-1">From the DVC <code>drift</code> stage (<code>reports/drift/drift_report.json</code>): is the test period
+        (2024–2025) still like the data the models learned from?</p>
+      <div id="health-body" class="mt-3">{{ ui.skeleton_lines(3) }}</div>
+    </section>
+
+    <!-- 11 -->
     <section class="card p-5 doc-section" id="advisory">
-      <h2>10. Advisory engine</h2>
-      <p class="mt-1">Rules and thresholds from <code>pipeline/step6_advisory.py</code>. Thresholds are percentiles of the training distribution.</p>
+      <h2>11. Advisory engine</h2>
+      <p class="mt-1">Rules from <code>src/core/advisory.py</code>; thresholds from <code>params.yaml</code>. Thresholds are percentiles of the training distribution.</p>
       <table class="tbl mt-3"><thead><tr><th>Disease / layer</th><th>Trigger</th><th>Advisory</th><th>Actions</th></tr></thead>
         <tbody id="adv-rows"></tbody></table>
       <div class="mt-3">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis. General environmental health guidance only.") }}</div>
     </section>
 
-    <!-- 11 -->
+    <!-- 12 -->
     <section class="limitations p-5 doc-section" id="limitations">
-      <h2 class="flex items-center gap-2"><i data-lucide="triangle-alert" class="w-5 h-5 text-[var(--high)]"></i>11. Limitations</h2>
+      <h2 class="flex items-center gap-2"><i data-lucide="triangle-alert" class="w-5 h-5 text-[var(--high)]"></i>12. Limitations</h2>
       <ul class="list-disc pl-5 mt-2 space-y-1">
         <li><b>Missing variables:</b> no humidity, elevation, UV, wind or confirmed case counts in the training data.</li>
         <li><b>Country level:</b> trained on one weekly series per country; the Bangladesh division map only varies local weather.</li>
@@ -164,20 +176,21 @@
         <li><b>Dataset scales:</b> the dataset's temperature is not real °C, so live temperature is quantile-mapped.</li>
         <li><b>Frozen inputs:</b> past disease counts (autoregressive features) stop at the dataset's last week.</li>
         <li><b>Cardiovascular:</b> no predictive skill (test R² <span id="lim-cardio">≈ 0</span>).</li>
+        <li><b>Waterborne leakage:</b> its rolling-window features include the current week's case count, so its R² is optimistic.</li>
         <li><b>Prototype only — not a clinical tool.</b> Do not use it for medical decisions.</li>
       </ul>
     </section>
 
-    <!-- 12 -->
+    <!-- 13 -->
     <section class="card p-5 doc-section" id="team">
-      <h2>12. Team</h2>
+      <h2>13. Team</h2>
       <div class="flex flex-wrap items-center gap-3 mt-3">
         <div class="panel px-4 py-3"><div class="text-[11px] text-[var(--muted)]">Team</div><div class="font-semibold text-[var(--heading)]">Phoenix Force</div></div>
         {% for m in ["Sayma Talukder Rupa", "Md. Taohid Islam Khan Tazim", "Farhan Tariq Jamee"] %}
           <div class="panel px-4 py-3 flex items-center gap-2"><i data-lucide="user-round" class="w-4 h-4 text-[var(--primary)]"></i><span class="text-[var(--heading)] text-[13px]">{{ m }}</span></div>
         {% endfor %}
       </div>
-      <p class="mt-3">Course: <b>Data Analytics Laboratory</b>, Summer 2026, United International University (UIU).</p>
+      <p class="mt-3">Courses: <b>Data Analytics Laboratory</b> and <b>DS-4491 Machine Learning Systems Design</b>, Summer 2026, United International University (UIU).</p>
     </section>
   </div>
 </div>

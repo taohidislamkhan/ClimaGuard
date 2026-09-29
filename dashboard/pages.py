@@ -2,7 +2,8 @@
 
 Live, per-location data comes from the cached model run in
 ``DashboardService``; static assets (metrics, SHAP, dataset predictions)
-come from ``artifacts/*.json`` built by ``scripts/build_page_assets.py``.
+come from ``artifacts/*.json`` built by the DVC ``assets`` stage, and model
+health from ``reports/drift/drift_report.json`` (the ``drift`` stage).
 """
 
 from __future__ import annotations
@@ -17,11 +18,15 @@ from pathlib import Path
 import pandas as pd
 
 from . import advisory, scoring, shap_utils, weather_client
-from .inference import FEATURED_PATH, MODEL_DIR, MODEL_NAMES, ROOT, TARGETS, TASKS
+from src.core.features import drop_first_week
+from src.utils import paths
+from src.utils.config import load_params
+
+from .inference import FEATURED_PATH, MODEL_DIR, MODEL_NAMES, TARGETS, TASKS
 from .service import DISEASE_LABELS, DISEASE_ORDER, DashboardService, aqi_category
 from .storage import clean_profile
 
-ART = ROOT / "artifacts"
+ART = paths.ARTIFACTS
 APP_VERSION = "2.0.0"
 LAYERS = ["overall"] + DISEASE_ORDER
 RANGES = {"4w": 4, "12w": 12, "1y": 52, "all": None}
@@ -46,11 +51,22 @@ class ArtifactMissing(RuntimeError):
     pass
 
 
+def model_health() -> dict | None:
+    """Summary of the drift stage's report, or None if it has not been run."""
+    if not paths.DRIFT_REPORT.exists():
+        return None
+    r = json.loads(paths.DRIFT_REPORT.read_text())
+    return {"retrain_recommended": r["retrain_recommended"], "reasons": r["reasons"],
+            "response": r["response"], "data": r["data_drift"], "concept": r["concept_drift"],
+            "thresholds": {k: r["thresholds"][k] for k in ("psi_threshold", "ks_pvalue", "f1_tolerance", "rmse_tolerance",
+                                                           "max_drifted_share", "max_flagged_share")}}
+
+
 @lru_cache(maxsize=None)
 def artifact(name: str) -> dict:
     path = ART / name
     if not path.exists():
-        raise ArtifactMissing(f"{path.name} not found — run `python scripts/build_page_assets.py`.")
+        raise ArtifactMissing(f"{path.name} not found — run `dvc pull` or `dvc repro assets`.")
     return json.loads(path.read_text())
 
 
@@ -285,9 +301,7 @@ class PageData:
     def _featured(self) -> pd.DataFrame:
         with self._flock:
             if self._fd is None:
-                fd = pd.read_csv(FEATURED_PATH, parse_dates=["date"])
-                lag1 = [c for c in fd.columns if c.endswith("_lag1w")][0]
-                self._fd = fd[fd[lag1].notna()].reset_index(drop=True)
+                self._fd = drop_first_week(pd.read_parquet(FEATURED_PATH))
             return self._fd
 
     def _detail(self, name: str, pred, x: pd.DataFrame) -> dict:
@@ -375,6 +389,7 @@ class PageData:
                        "title": advisory.DISPLAY[rule]["title"],
                        "actions": advisory._bullets(advisory.ADVISORY_RULES[rule])}
                       for lvl, rule in [("Medium", "overall_medium"), ("High", "overall_high")]]
+        split = load_params()["split"]
         adv_table.append({"disease": "Cardiovascular", "trigger": "none",
                           "title": "Excluded", "actions": ["No rule: the model has no predictive skill"]})
         return {
@@ -383,9 +398,10 @@ class PageData:
             "features": artifact("features.json"), "metrics": metrics,
             "regressors": regressors, "shap": artifact("shap_global.json"),
             "advisory_table": adv_table,
-            "split": {"train_end": "2022-12-31", "val_end": "2023-12-31",
+            "split": {"train_end": split["train_end"], "val_end": split["val_end"],
                       "test_start": tp["start"], "test_end": tp["end"],
-                      "sizes": json.loads((ROOT / "output" / "phase6_run_summary.json").read_text())["split_sizes"]},
+                      "sizes": {k: v["rows"] for k, v in json.loads(paths.SPLIT_SUMMARY.read_text()).items()}},
+            "drift": model_health(),
             "disclaimer": advisory.DISCLAIMER,
         }
 

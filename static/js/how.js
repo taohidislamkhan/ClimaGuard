@@ -192,6 +192,41 @@ function renderShap(shap) {
   });
 }
 
+function renderHealth(h) {
+  const body = document.getElementById("health-body");
+  if (!h) {
+    body.innerHTML = `<p class="text-[12px]">No drift report yet. Run <code>dvc repro drift</code>.</p>`;
+    return;
+  }
+  document.getElementById("health-status").innerHTML = h.retrain_recommended
+    ? badge("High", "Retraining recommended") : badge("Low", "Healthy — no retraining needed");
+  const d = h.data, c = h.concept, t = h.thresholds;
+  const worst = d.worst.map((w) => `<tr class="${w.psi >= t.psi_threshold ? "hi" : ""}"><td>${esc(w.feature)}</td>
+    <td>${w.psi.toFixed(3)}</td><td>${w.ks_pvalue < 0.001 ? "&lt; 0.001" : w.ks_pvalue.toFixed(3)}</td></tr>`).join("");
+  const flagged = Object.entries(c.flagged_by_task || {});
+  body.innerHTML = `
+    <div class="grid gap-4" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+      <div class="panel p-3">
+        <div class="text-[13px] font-semibold text-[var(--heading)]">Data drift (inputs)</div>
+        <p class="text-[12px] mt-1"><b>${d.n_drifted}</b> of ${d.n_features} model features drifted
+          (PSI ≥ ${t.psi_threshold} and KS p &lt; ${t.ks_pvalue}); <b>${d.top_features_drifted}</b> of the top
+          ${d.top_features_checked} SHAP features.</p>
+        <table class="tbl mt-2"><thead><tr><th>Largest shifts</th><th>PSI</th><th>KS p</th></tr></thead><tbody>${worst}</tbody></table>
+      </div>
+      <div class="panel p-3">
+        <div class="text-[13px] font-semibold text-[var(--heading)]">Concept drift (performance)</div>
+        <p class="text-[12px] mt-1">Each test quarter vs the same quarter of the validation year:
+          flagged if macro-F1 drops &gt; ${t.f1_tolerance} or RMSE rises &gt; ${Math.round(100 * t.rmse_tolerance)}%.</p>
+        <p class="text-[12px] mt-2"><b>${c.n_flagged}</b> of ${c.n_windows} task-quarters flagged${flagged.length
+          ? ": " + flagged.map(([k, n]) => `${esc(k)} (${n})`).join(", ") : "."}</p>
+      </div>
+    </div>
+    <div class="panel p-3 mt-3 text-[12px]">
+      <b class="text-[var(--heading)]">Response policy:</b> ${esc(h.response)}
+      ${h.reasons.length ? `<ul class="list-disc pl-5 mt-1">${h.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+    </div>`;
+}
+
 function renderAdvisory(rows) {
   document.getElementById("adv-rows").innerHTML = rows.map((r) => `
     <tr><td class="font-semibold">${esc(r.disease)}</td><td>${esc(r.trigger)}</td><td>${esc(r.title)}</td>
@@ -224,5 +259,6 @@ Page.run(() => api("/api/methodology"), (m) => {
   renderClassifiers(m.metrics);
   renderRegressors(m.regressors);
   renderShap(m.shap);
+  renderHealth(m.drift);
   renderAdvisory(m.advisory_table);
 });

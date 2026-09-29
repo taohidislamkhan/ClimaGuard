@@ -67,18 +67,18 @@ def tree_explainer(model):
 def local_shap(model, x: pd.DataFrame) -> np.ndarray:
     """Per-feature SHAP values for a single-row frame ``x``."""
     steps = getattr(model, "steps", None)
-    final = steps[-1][1] if steps else model
+    final = steps[-1][1] if steps else getattr(model, "model", model)   # unwrap EncodedClassifier
     if hasattr(final, "coef_") and steps:
         z = np.asarray(model[:-1].transform(x), dtype=float)[0]
         coef = np.asarray(final.coef_, dtype=float)
         if coef.ndim == 2:
-            coef = coef[_high_index(final)] if coef.shape[0] > 1 else coef[0]
+            coef = coef[_high_index(model)] if coef.shape[0] > 1 else coef[0]
         return coef * z
     sv = tree_explainer(final).shap_values(x)
     if isinstance(sv, list):
-        return np.asarray(sv[_high_index(final)])[0]
+        return np.asarray(sv[_high_index(model)])[0]
     arr = np.asarray(sv)
-    return arr[0, :, _high_index(final)] if arr.ndim == 3 else arr[0]
+    return arr[0, :, _high_index(model)] if arr.ndim == 3 else arr[0]
 
 
 def contribution_level(norm: float) -> str:

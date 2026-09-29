@@ -1,0 +1,8 @@
+# Always check text out with LF endings. DVC hashes the code files listed as
+# stage dependencies, so CRLF on a Windows clone would make `dvc status`
+# report changes that are not there.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

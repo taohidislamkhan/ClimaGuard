@@ -1,7 +1,7 @@
 """Wrap the pipeline's rule-based advisory engine for the dashboard.
 
-Trigger logic and message text come from ``pipeline/step6_advisory.py``
-(``ADVISORY_RULES`` / ``THRESHOLDS``). A disease rule fires when the
+Message text comes from ``src/core/advisory.py`` (``ADVISORY_RULES``) and the
+thresholds from ``params.yaml`` (``advisory``). A disease rule fires when the
 model's prediction clears the configured quantile of the training target —
 equivalently, when its 0–100 percentile score reaches ``q × 100``. Overall
 Medium/High layers follow the classifier's argmax class. This module only
@@ -11,14 +11,7 @@ into bullets.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-_PIPELINE = Path(__file__).resolve().parent.parent / "pipeline"
-if str(_PIPELINE) not in sys.path:
-    sys.path.insert(0, str(_PIPELINE))
-
-from step6_advisory import ADVISORY_RULES, THRESHOLDS  # noqa: E402
+from src.core.advisory import ADVISORY_RULES, THRESHOLDS
 
 DISCLAIMER = "This is an environmental risk estimate, not a medical diagnosis."
 FOOTER = ("General environmental health guidance. For medical concerns, "

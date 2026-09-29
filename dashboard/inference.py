@@ -1,43 +1,43 @@
 """Model loading and feature-row construction.
 
-The saved Phase 6 winners are used as-is (no retraining):
+The dashboard never trains. It loads the validation winners that the DVC
+``train`` stage saved as ``models/best_<task>.joblib`` (which model won each
+task is read from ``reports/metrics/validation_metrics.json``).
 
-    overall_classifier  Logistic Regression (scaled)   -> P(Low/Medium/High)
-    respiratory         Random Forest
-    vector              Random Forest
-    waterborne          Random Forest
-    heat                XGBoost
-    cardio              ElasticNet (scaled; R^2 ~ 0 on validation)
-
-Every model expects the same 50 columns (``feature_names_in_``). A live
+Every model expects the same columns (``feature_names_in_``). A live
 feature row is built in three layers:
 
-1. A **template**: the latest Bangladesh week in ``featured_data.csv``.
+1. A **template**: the latest Bangladesh week in ``features.parquet``.
    It supplies the country context (GDP, healthcare access, food security,
    lat/lon, one-hot region/income/climate) and the lagged disease counts
    (waterborne / heat-admission lags), which no live API provides.
 2. **Live weather** (13 weekly aggregates from Open-Meteo) replaces every
    temperature / PM2.5 / AQI / precipitation / heat-wave feature, recomputed
-   with the same rolling / lag / interaction rules as pipeline step 3.
+   with the same rolling / lag / interaction rules as the featurize stage.
 3. Missing values are filled with the training-period median, exactly as
-   step 5 did before fitting.
+   the train stage did before fitting.
 """
 
 from __future__ import annotations
 
+import json
 import warnings
 from dataclasses import dataclass
-from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent.parent
-MODEL_DIR = ROOT / "models" / "phase6"
-FEATURED_PATH = ROOT / "data" / "processed" / "featured_data.csv"
+from src.core.features import drop_first_week
+from src.core.models import MODEL_LABELS
+from src.utils import paths
+from src.utils.config import load_params
 
-TRAIN_END_DATE = "2022-12-31"   # same chronological cut as step 5
+ROOT = paths.ROOT
+MODEL_DIR = paths.MODELS
+FEATURED_PATH = paths.FEATURES
+
+TRAIN_END_DATE = load_params()["split"]["train_end"]   # same chronological cut as training
 COUNTRY_CODE = "BGD"
 
 TASKS = {
@@ -57,11 +57,16 @@ TARGETS = {
     "cardio":      "cardio_mortality_rate",
 }
 
-MODEL_NAMES = {
-    "overall": "Logistic Regression", "respiratory": "Random Forest",
-    "vector": "Random Forest", "heat": "XGBoost",
-    "waterborne": "Random Forest", "cardio": "ElasticNet",
-}
+
+def _model_names() -> dict[str, str]:
+    """Display name of each task's winner, e.g. {"overall": "Logistic Regression"}."""
+    if not paths.VALIDATION_METRICS.exists():
+        return {k: "–" for k in TASKS}
+    winners = json.loads(paths.VALIDATION_METRICS.read_text())["winners"]
+    return {k: MODEL_LABELS[winners["overall_classifier" if k == "overall" else k]] for k in TASKS}
+
+
+MODEL_NAMES = _model_names()
 
 # Weather base columns and the step-3 rules that derive features from them.
 WEATHER_COLS = ["temperature_celsius", "pm25_ugm3", "air_quality_index",
@@ -76,7 +81,7 @@ def derive_weather_features(weekly: pd.DataFrame) -> dict[str, float]:
 
     ``weekly`` has one row per week (oldest first) and the WEATHER_COLS.
     Rolling windows include the current week (``min_periods=1``), lags
-    shift by whole weeks — both identical to pipeline step 3.
+    shift by whole weeks — both identical to the featurize stage.
     """
     out: dict[str, float] = {}
     last = len(weekly) - 1
@@ -116,9 +121,9 @@ class ModelStore:
     def __init__(self) -> None:
         missing = [f for f in TASKS.values() if not (MODEL_DIR / f).exists()]
         if missing:
-            raise FileNotFoundError(f"Missing model files in {MODEL_DIR}: {missing}")
+            raise FileNotFoundError(f"Missing model files in {MODEL_DIR}: {missing} "
+                                    "— run `dvc pull` (or `dvc repro`).")
         with warnings.catch_warnings():
-            # Models were pickled with sklearn 1.9.0; 1.9.1 loads them fine.
             warnings.simplefilter("ignore")
             self.models = {k: joblib.load(MODEL_DIR / f) for k, f in TASKS.items()}
 
@@ -127,10 +132,8 @@ class ModelStore:
             if list(m.feature_names_in_) != self.features:
                 raise RuntimeError(f"Model {k} uses a different feature list")
 
-        fd = pd.read_csv(FEATURED_PATH, parse_dates=["date"])
-        # Step 4/5 dropped the first week per country (NaN lag1w); mirror it.
-        lag1 = [c for c in fd.columns if c.endswith("_lag1w")][0]
-        fd = fd[fd[lag1].notna()].reset_index(drop=True)
+        # Training dropped the first week per country (NaN lag1w); mirror it.
+        fd = drop_first_week(pd.read_parquet(FEATURED_PATH))
         train = fd[fd["date"] <= TRAIN_END_DATE]
 
         self.train_median = train[self.features].median(numeric_only=True)
