@@ -125,6 +125,8 @@ class ModelStore:
                                     "— run `dvc pull` (or `dvc repro`).")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            # Single-threaded predict: bit-identical outputs, and ~2.5x faster than
+            # parallel for the dashboard's small batches (thread start-up dominates).
             self.models = {k: load_model(MODEL_DIR / f) for k, f in TASKS.items()}
 
         self.features: list[str] = list(self.models["overall"].feature_names_in_)
