@@ -1,8 +1,8 @@
 # ClimaGuard — EDA Summary (Phase 3)
 
-**Input:** `data/processed/cleaned_data.csv` — 14,050 rows × 33 columns
+**Input:** cleaned data (now `data/interim/clean.parquet`, DVC stage `prepare`) — 14,050 rows × 33 columns
 (14,100 raw − 50 duplicate country-week rows; see `data_card.md`).
-**Plots:** `output/charts/*.png` (13 figures) + `correlation_matrix.csv`.
+**Plots:** originally `output/charts/*.png` from the pre-DVC EDA script; the dashboard's How It Works page now draws the EDA charts from `artifacts/eda.json` and `artifacts/correlation.json`.
 
 ## 1. Distribution shapes (`hist_numeric.png`)
 

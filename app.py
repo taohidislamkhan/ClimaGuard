@@ -3,10 +3,10 @@
 Run::
 
     pip install -r requirements.txt
-    python scripts/build_page_assets.py   # once: precomputes artifacts/*.json
-    python app.py                         # http://127.0.0.1:5000
+    dvc pull          # models, data and artifacts/ from the DVC remote (or: dvc repro)
+    python app.py     # http://127.0.0.1:5000
 
-The legacy Streamlit app lives in ``app/`` and is unaffected.
+The app only reads DVC pipeline outputs; it never trains.
 """
 
 from __future__ import annotations
@@ -177,6 +177,7 @@ def create_app(service: DashboardService | None = None) -> Flask:
 
 
 if __name__ == "__main__":
+    import os
     import threading
 
     application = create_app()
@@ -188,4 +189,4 @@ if __name__ == "__main__":
         application.config["PAGES_DATA"].warm()
 
     threading.Thread(target=warm, daemon=True).start()
-    application.run(debug=False, port=5000)
+    application.run(debug=False, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5000)))

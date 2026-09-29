@@ -1,33 +1,26 @@
-# ClimaGuard — Streamlit dashboard container
+# ClimaGuard — Flask dashboard container.
 #
+# The image needs the DVC outputs, so pull them before building:
+#   dvc pull
 #   docker build -t climaguard .
-#   docker run --rm -p 8501:8501 climaguard
-#
-# Then open http://localhost:8501
+#   docker run --rm -p 5000:5000 climaguard
+# Then open http://localhost:5000
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
-# Avoid .pyc files and force stdout flushing (so Streamlit logs are live).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HOST=0.0.0.0 \
+    PORT=5000
 
 WORKDIR /app
 
-# Install CPU-only deps first to take advantage of Docker layer caching.
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-# Copy the rest of the source.
 COPY . .
 
-# Streamlit defaults: listen on all interfaces inside the container, default port.
-EXPOSE 8501
-ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
-    STREAMLIT_SERVER_PORT=8501 \
-    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-
-# The dashboard needs models/phase6/* and data/processed/* in the image.
-# If a model file is missing, the app shows a friendly fallback (see app/advisory_app.py).
-CMD ["streamlit", "run", "app/advisory_app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+EXPOSE 5000
+CMD ["python", "app.py"]

@@ -67,7 +67,7 @@
     {% endcall %}
 
     <!-- Advisory -->
-    {% call ui.card("Advisory actions", "bell", cls="p-4", chip_html=ui.chip("Rule engine", "From pipeline/step6_advisory.py. A disease advisory fires when its model score is in the top 20% of training weeks.")) %}
+    {% call ui.card("Advisory actions", "bell", cls="p-4", chip_html=ui.chip("Rule engine", "From src/core/advisory.py (thresholds in params.yaml). A disease advisory fires when its model score is in the top 20% of training weeks.")) %}
       <div class="mt-3" id="adv-box"></div>
       <div class="mt-3">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis. General environmental health guidance — for medical concerns, consult a qualified healthcare professional.") }}</div>
     {% endcall %}

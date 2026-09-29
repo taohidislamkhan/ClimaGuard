@@ -1,199 +1,294 @@
-# ClimaGuard — Regional Environmental Disease Risk Intelligence
+# ClimaGuard — Regional Environmental Disease-Risk Nowcast
 
-A Streamlit dashboard on top of a chronological-split ML pipeline
-(25 countries × 564 weeks of climate + health data, 2015-01-04 → 2025-10-19).
-It predicts **regional** Low/Medium/High environmental disease risk,
-not individual medical diagnoses.
+**Team Phoenix Force:** Sayma Talukder Rupa · Md. Taohid Islam Khan Tazim · Farhan Tariq Jamee
+**Course:** DS-4491 Machine Learning Systems Design (also presented in Data Analytics Laboratory), United International University, Summer 2026
 
-## Quick start
+ClimaGuard estimates weekly **regional** disease risk from climate, air-quality and
+socioeconomic data for 25 countries (2015–2025). One classifier predicts an overall
+Low / Medium / High risk class, and five regressors predict respiratory, vector-borne,
+heat-related, waterborne and cardiovascular indicators. SHAP explains every
+prediction, a rule engine turns them into public-health advisories, and a Flask
+dashboard shows the results for Bangladesh with live Open-Meteo weather.
+The whole ML workflow is a reproducible **DVC pipeline**:
+`git clone` → `dvc pull` → `dvc repro` gives the same data, models and metrics.
 
-```powershell
-# 1. Install
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+> ⚠️ **Disclaimer.** This is a *regional environmental risk nowcast* for a population,
+> built from country-level weekly data. It is **not a medical diagnosis** and must not
+> be used for individual health decisions.
 
-# 2. (Optional) regenerate pipeline artefacts
-python run_all.py --skip-slow
+---
 
-# 3. Launch the dashboard
-streamlit run app/app.py
-# → open http://localhost:8501
-```
+## 1. Problem & dataset
 
-## Architecture
+**Problem.** Climate and pollution drive several disease burdens with a lag (heat
+→ admissions within days; rain + warmth → mosquitoes within weeks). Given a
+country-week of environmental data, estimate how elevated each disease indicator is.
+
+**Dataset.** `global_climate_health_impact_tracker_2015_2025.csv`
+(Global Climate-Health Impact Tracker), tracked with DVC under `data/raw/`.
+
+| Property | Value |
+|---|---|
+| Rows × columns | 14,100 × 30 |
+| Countries / regions | 25 countries, 6 regions |
+| Granularity | weekly, 564 weeks per country, 2015-01-04 → 2025-10-19 |
+| Features | temperature, anomaly, precipitation, heat-wave days, drought/flood flags, extreme events, PM2.5, AQI, population, GDP, healthcare access, food security, mental-health index |
+| Targets | respiratory rate, cardio mortality, vector-borne risk score, waterborne incidents, heat admissions |
+| Nulls | 0 |
+
+**Cleaning** (`prepare` stage, counts in `reports/metrics/data_quality.json`):
+- 374 negative AQI values → 0.
+- Healthcare access clipped to ≤ 100 (3 rows).
+- Disease rates and counts, PM2.5 and precipitation clipped to ≥ 0 (none were negative).
+- Drought/flood flags forced to 0/1.
+- 50 duplicate country-week rows dropped (ISO week numbers repeat at some year boundaries): 14,100 → 14,050 rows.
+- Rows sorted by country and date before any lag or rolling window.
+
+**Known gaps:**
+- There is no humidity, wind, UV, elevation, smoking/BMI or confirmed case count data.
+- The temperature column is on the dataset's own scale, not real °C.
+- The data is country-level and weekly, so there is nothing below national level or finer than a week.
+
+## 2. ML model
+
+| Task | Target | Candidates (4 per task) | Selection |
+|---|---|---|---|
+| Overall risk classifier | `risk_class` (Low/Medium/High) | Logistic Regression (elastic-net), Decision Tree, Random Forest, XGBoost | best **validation** macro-F1 |
+| 5 disease regressors | one per disease | ElasticNet, Decision Tree, Random Forest, XGBoost | best **validation** RMSE |
+
+- **Label:** `risk_class` = tertiles of a composite `health_impact_score`. The cut points use years ≤ 2023 only, and the score is never used as a feature.
+- **Features:** 163 engineered predictors, all computed **inside each country**:
+  - rolling mean/sum/max over 4/8/12 weeks
+  - lags of 1/2/4/8 weeks
+  - sin/cos of week and month
+  - interactions (temperature × PM2.5, rain × temperature, PM2.5 × AQI)
+  - one-hot country, region, income and climate zone
+- **Feature selection:** correlation pruning (|r| > 0.95) + a committee of Pearson, mutual information and Random Forest importance. A feature needs ≥ 2 votes, then the top 60 are kept. Result: 55 features, of which 51 are used after removing targets.
+- **Why tree models:**
+  - Risk responds non-linearly (heat admissions jump above a temperature threshold).
+  - Interactions matter (hot *and* polluted).
+  - Feature scales differ by orders of magnitude.
+  - SHAP's TreeExplainer is exact for trees.
+  - Linear models are kept as baselines, and they win where the signal is roughly linear.
+- **Why a chronological split:** lag and rolling features copy values across neighbouring weeks. A random split would put test-week information inside the training windows and inflate the scores. So:
+  - train: ≤ 2022-12-31 (10,375 rows)
+  - validation: 2023 (1,300 rows)
+  - test: 2024-01-07 → 2025-10-19 (2,350 rows)
+
+  The test split is never used to choose a model.
+
+## 3. Project structure
 
 ```
 ClimaGuard/
-├── app/
-│   ├── app.py                  # Entry point: page router + theme + sidebar
-│   ├── components/
-│   │   ├── theme.py            # CSS + colour palette + ring-score renderer
-│   │   ├── sidebar.py          # Dark-navy nav + country/date inputs
-│   │   ├── layout.py           # page_header, disease_card, shap_bars, env_cell
-│   │   └── data.py             # @cache_data loaders (cleaned data, metrics, SHAP)
-│   ├── pages/
-│   │   ├── dashboard.py        # Landing screen (hero + 5 disease cards + …)
-│   │   ├── my_risk.py          # Country + date picker → overall + per-disease
-│   │   ├── environment.py      # Time-series of climate / air-quality for selection
-│   │   ├── risk_map.py         # Full-screen Plotly choropleth + scrubber
-│   │   ├── risk_history.py     # Multi-country P(High) trajectories
-│   │   ├── regional.py         # Country & region comparison
-│   │   ├── disease.py          # Per-disease model summary + SHAP top features
-│   │   ├── models.py           # Classifier + per-disease R² tables
-│   │   ├── explain.py          # Global / beeswarm / local SHAP
-│   │   ├── methodology.py      # Dataset card, correlation heatmap, limitations
-│   │   ├── how.py              # 8-step pipeline walkthrough
-│   │   └── settings.py         # Diagnostics + artefact status
-│   └── utils/
-│       └── predict.py          # Inference layer: assess(), historical_*(), SHAP
-├── pipeline/                   # step1 → step7 (clean, EDA, features, …)
-├── models/phase6/              # trained .joblib winners
-├── output/                     # advisories.csv, phase6_metrics.csv, shap_*.csv
-├── data/processed/             # cleaned_data.csv
-├── run_all.py                  # orchestrator (Phase 1-7)
-├── requirements.txt
-├── Dockerfile                  # python:3.11-slim + streamlit
-└── .gitignore / .dockerignore
+├── data/
+│   ├── raw/…csv.dvc            # pointer to the raw CSV (the CSV itself is in DVC)
+│   ├── interim/clean.parquet   # prepare output
+│   └── processed/              # features, selected feature list, train/val/test
+├── src/
+│   ├── core/                   # pure logic: cleaning, features, selection, models, advisory rules
+│   ├── stages/                 # one script per DVC stage (python -m src.stages.<name>)
+│   └── utils/                  # paths, params.yaml loader, JSON/model IO, README table generator
+├── models/                     # candidates/ (24 fitted models), best_<task>.joblib, preprocess.json
+├── reports/
+│   ├── metrics/                # JSON metrics tracked by Git (dvc metrics show)
+│   ├── plots/                  # confusion matrix, predicted-vs-actual, drift CSVs (dvc plots show)
+│   ├── shap/                   # global SHAP per model (JSON + PNG)
+│   └── drift/                  # drift_report.json, per-feature PSI/KS, drift.png
+├── artifacts/                  # precomputed dashboard JSON (assets stage)
+├── dashboard/ templates/ static/ app.py   # Flask dashboard (reads only pipeline outputs)
+├── tests/                      # pytest: API, scoring, pipeline outputs
+├── params.yaml                 # every tunable value
+├── dvc.yaml / dvc.lock         # pipeline definition / exact hashes of the last run
+├── VIVA_NOTES.md               # viva Q&A + live demo script
+└── requirements.txt
 ```
 
-## Pipeline
+## 4. DVC pipeline
 
-```
-step1  step2    step3                step4              step5              step6              step7
-clean → EDA → 163 engineered → committee-vote → 4 models × 6 tasks → rule-based → SHAP
-                features        (top-60 cap;        (chronological split) advisories       importance
-                                 54 survive, 50 used)
-```
-
-### Phase 6 model results (test split, 2024-01-07 → 2025-10-19)
-
-| Task            | Winner | Metric | Value |
+| Stage | Script | Main deps | Outputs |
 |---|---|---|---|
-| Overall classifier | Logistic Regression | macro-F1 / ROC-AUC | 0.819 / 0.944 |
-| Respiratory        | Random Forest       | R² / RMSE            | 0.560 / 10.16 |
-| Vector-borne       | Random Forest       | R² / RMSE            | 0.916 / 5.11 |
-| Heat-related       | XGBoost             | R² / RMSE            | 0.830 / 4.04 |
-| Waterborne         | Random Forest       | R² / RMSE            | 0.627 / 3.99 |
-| Cardiovascular     | ElasticNet          | R² / RMSE            | **−0.008** / 5.63 |
+| prepare | `src/stages/prepare.py` | raw CSV | `data/interim/clean.parquet`, `data_quality.json` |
+| featurize | `src/stages/featurize.py` | clean.parquet | `data/processed/features.parquet`, `featurize.json` |
+| select_features | `src/stages/select_features.py` | features.parquet | `selected_features.json`, `feature_rankings.csv`, `feature_selection.json` |
+| split | `src/stages/split.py` | features + selection | `train/val/test.parquet`, `split_summary.json` |
+| train | `src/stages/train.py` | train, val | `models/candidates/`, `models/best_*.joblib`, `preprocess.json`, `validation_metrics.json` |
+| evaluate | `src/stages/evaluate.py` | models, test | `classifier_metrics.json`, `regressor_metrics.json`, `model_comparison.csv`, plots |
+| explain | `src/stages/explain.py` | winners, test | `reports/shap/` |
+| drift | `src/stages/drift.py` | splits, winners, SHAP | `drift_report.json`, `feature_drift.csv`, `drift_quarterly.csv` |
+| assets | `src/stages/assets.py` | data, models, reports | `artifacts/*.json` (dashboard) |
 
-> **Note.** The brief lists proposal numbers (RF acc 0.617 / F1 0.615 / ROC 0.799,
-> cardio R² 0.118). The dashboard shows what the actual pipeline produced on the
-> held-out test split — different but the same models and methodology.
->
-> Winners are the models step5 picked on **validation** RMSE / macro-F1
-> (`output/phase6_run_summary.json`) — the ones saved in `models/phase6/`.
-> The app never re-picks a winner by test score.
+`dvc dag --md` output (DVC draws this from the deps/outs in `dvc.yaml`):
 
-## What the dashboard shows
+<!-- DAG:START -->
+```mermaid
+flowchart TD
+	node1["assets"]
+	node2["data/raw/global_climate_health_impact_tracker_2015_2025.csv.dvc"]
+	node3["drift"]
+	node4["evaluate"]
+	node5["explain"]
+	node6["featurize"]
+	node7["prepare"]
+	node8["select_features"]
+	node9["split"]
+	node10["train"]
+	node2-->node1
+	node2-->node7
+	node4-->node1
+	node5-->node1
+	node5-->node3
+	node6-->node1
+	node6-->node8
+	node6-->node9
+	node7-->node1
+	node7-->node6
+	node8-->node1
+	node8-->node9
+	node8-->node10
+	node9-->node3
+	node9-->node4
+	node9-->node5
+	node9-->node10
+	node10-->node1
+	node10-->node3
+	node10-->node4
+	node10-->node5
+```
+<!-- DAG:END -->
 
-| Page | Purpose |
+**`params.yaml`.** Every setting a stage uses lives here. DVC records each stage's params in `dvc.lock`, so changing one reruns only the stages that use it.
+
+| Section | What it controls | Used by |
+|---|---|---|
+| `seed` | random state for every model, the MI subsample and the SHAP sample | select_features, train, explain, assets |
+| `prepare` | which columns are clipped / forced binary, the dedup key | prepare |
+| `featurize` | rolling windows `[4, 8, 12]`, lags `[1, 2, 4, 8]`, interactions, dummies | featurize |
+| `label` | tertile cut year and the composite score's columns | featurize |
+| `select` | `corr_threshold` 0.95, `min_votes` 2, `top_k` 60, MI sample, RF trees | select_features |
+| `split` | `train_end` 2022-12-31, `val_end` 2023-12-31 | split, train, assets |
+| `train` | hyperparameters of all 4 model families | train |
+| `explain` | SHAP `sample_size` (200) and plot size | explain |
+| `drift` | PSI / KS thresholds, tolerances, which tasks to check | drift |
+| `advisory` | quantile thresholds for the advisory rules | dashboard |
+| `assets` | sample sizes for the dashboard charts | assets |
+
+## 5. How to run
+
+```bash
+git clone https://github.com/taohidislamkhan/ClimaGuard.git
+cd ClimaGuard
+python -m venv venv
+venv\Scripts\activate                 # Linux / macOS: source venv/bin/activate
+pip install -r requirements.txt
+
+# DVC remote credentials (once; stored in the git-ignored .dvc/config.local)
+dvc remote modify --local origin auth basic
+dvc remote modify --local origin user <your-dagshub-username>
+dvc remote modify --local origin password <your-dagshub-token>
+
+dvc pull          # raw data, models and all outputs for this commit
+dvc repro         # "Data and pipelines are up to date." — or rebuilds what changed
+python app.py     # dashboard at http://127.0.0.1:5000
+python -m pytest -q
+```
+
+Without remote access, place the raw CSV at `data/raw/` and run `dvc repro`. The full run takes about 7 minutes on a 4-core laptop. `train` (~4 min) and `explain` (~2 min) are the slow stages.
+
+**Change a parameter and rerun:**
+```bash
+# e.g. params.yaml → train.rf.n_estimators: 100
+dvc status          # lists the stages whose params/deps changed
+dvc repro           # reruns train → evaluate, explain, drift, assets; skips the data stages
+dvc params diff
+dvc metrics diff    # compare with the last commit
+dvc plots show      # confusion matrix, predicted vs actual, drift (dvc_plots/index.html)
+```
+After a change that should be kept, commit `params.yaml`, `dvc.lock` and `reports/metrics/`, run `dvc push`, then update the tables below with `python -m src.utils.readme_tables`.
+
+## 6. Results
+
+The tables below are generated from `reports/metrics/*.json` by
+`python -m src.utils.readme_tables`, and a test fails if they drift out of sync.
+
+<!-- RESULTS:START -->
+**Overall risk classifier** (Low / Medium / High), test split 2024-01-07 → 2025-10-19:
+
+| Model | Accuracy | Macro-F1 | ROC-AUC (OvR, weighted) |
+|---|---|---|---|
+| Logistic Regression ★ selected | 0.820 | 0.819 | 0.944 |
+| Random Forest | 0.809 | 0.809 | 0.938 |
+| XGBoost | 0.806 | 0.805 | 0.936 |
+| Decision Tree | 0.785 | 0.783 | 0.907 |
+
+**Disease regressors** (validation winner per disease), test split:
+
+| Disease | Model | R² | MAE | RMSE | Random Forest R² |
+|---|---|---|---|---|---|
+| Respiratory | Random Forest | 0.559 | 8.12 | 10.17 | 0.559 |
+| Vector-borne | Random Forest | 0.916 | 3.42 | 5.11 | 0.916 |
+| Heat-related | XGBoost | 0.832 | 2.58 | 4.02 | 0.803 |
+| Waterborne | Random Forest | 0.626 | 3.10 | 3.99 | 0.626 |
+| Cardiovascular | ElasticNet | -0.008 | 4.47 | 5.63 | -0.017 |
+
+**Top SHAP features** (mean |SHAP| of the saved winner on test weeks):
+
+- **overall_classifier** (Logistic Regression): `temperature_celsius`, `pm25_ugm3`, `temp_x_pm25`
+- **respiratory** (Random Forest): `pm25_ugm3`, `pm25_x_aqi`, `pm25_ugm3_lag8w`
+- **cardio** (ElasticNet): `heat_wave_days`, `temperature_celsius`, `temp_x_pm25`
+- **vector** (Random Forest): `temperature_celsius`, `rain_x_temp`, `waterborne_disease_incidents_lag8w`
+- **waterborne** (Random Forest): `waterborne_disease_incidents_roll_mean_4w`, `waterborne_disease_incidents_lag2w`, `waterborne_disease_incidents_lag1w`
+- **heat** (XGBoost): `week_sin`, `temperature_celsius`, `heat_wave_days`
+
+**Drift** (train 2015–2022 vs test 2024–2025):
+
+- Data drift: 1 of 51 features drifted; 0 of the top 15 SHAP features. Largest PSI: `gdp_per_capita_usd` = 0.257.
+- Concept drift: 0 of 40 task-quarters worse than the same quarter of 2023 beyond tolerance.
+- `retrain_recommended`: **false**
+<!-- RESULTS:END -->
+
+**How these relate to earlier numbers.**
+- *Proposal numbers.* The project proposal quoted preliminary figures (RF accuracy 0.617, F1 0.615, ROC-AUC 0.799; R² vector 0.909, heat 0.844, respiratory 0.555, waterborne 0.373, cardio 0.118). Those were produced before the final feature pipeline and are not what the final code outputs.
+- *Pre-DVC pipeline.* The refactored DVC pipeline reproduces that pipeline's results:
+  - The six selected models are within ±0.002 of the pre-DVC run (e.g. classifier accuracy 0.820 vs 0.8196).
+  - Every other model is within ±0.014.
+- *Why the numbers moved slightly.* The old scripts passed data between steps as CSV. Pandas' default CSV float parser changes about 86,000 values in the last binary digit, and that was enough to give one borderline feature (`precipitation_mm_lag2w`) a second vote. The pipeline now uses Parquet, which stores exact values, so the committee has 55 features instead of 54.
+
+**Key SHAP findings.**
+- Temperature and PM2.5 (and their product) dominate the overall risk class.
+- PM2.5 and PM2.5 × AQI drive respiratory risk.
+- Temperature and rain × temperature drive vector-borne risk.
+- Season (week of year), temperature and heat-wave days drive heat admissions.
+- Cardiovascular mortality is not predictable from climate here (test R² ≈ 0). The dashboard labels it low-reliability, and the advisory engine has no cardio rule.
+
+**Drift (bonus).** The `drift` stage compares the training years with 2024–25 in two ways:
+- *Data drift:* PSI + KS test on every model feature.
+- *Concept drift:* each test quarter against the same quarter of 2023.
+
+If drift is significant, `drift_report.json` sets `retrain_recommended: true`. The response is to move `split.train_end` / `split.val_end` forward and run `dvc repro`. Only GDP per capita drifted, which is a steady economic trend and not a top model feature. No quarter degraded beyond tolerance, so retraining is not needed. We still demonstrated the retrain path (§7 of VIVA_NOTES).
+
+## 7. Limitations and future work
+
+- **Waterborne leakage.** The rolling features of `waterborne_disease_incidents` include the current week, so the waterborne regressor partly sees its own target. Its R² (~0.63) is optimistic. We kept it so the original results stay reproducible. The fix is to shift those windows by one week.
+- **Label cut year.** The risk-class tertiles are cut on years ≤ 2023, which includes the validation year. It does not touch the test years.
+- **Cardiovascular** has no predictive skill from these features.
+- **Coarse data:** country-level, weekly, no humidity/UV/elevation, and the temperature is on a dataset scale. The Bangladesh division map only varies local weather.
+- **Frozen autoregressive inputs:** past disease counts stop at the dataset's last week, so live predictions reuse them.
+- **Future work:**
+  - fix the waterborne windows
+  - add humidity and real case counts
+  - calibrate the classifier's probabilities
+  - schedule the drift stage on new weekly data
+  - add a CI job that runs `dvc repro --dry` and the tests
+
+## 8. Dashboard
+
+`python app.py` → http://127.0.0.1:5000. The dashboard only reads pipeline outputs (`models/best_*.joblib`, `data/processed/features.parquet`, `artifacts/`, `reports/`). It never trains.
+
+| Dashboard | My Risk |
 |---|---|
-| **🏠 Dashboard** | Landing: greeting + hero risk score (donut), 5 disease cards, why-elevated SHAP, current environment, 12-week trend, advisories, what-changed, mini map, regional profile |
-| **📊 My Risk** | Country + date picker → overall risk + per-disease cards + P(High) history |
-| **🌦️ Environment** | 52-week time series of temperature / anomaly / PM2.5 / AQI / precip / heat waves |
-| **🗺️ Risk Map** | Choropleth with risk switcher (overall + 5 disease) + date scrubber |
-| **📈 Risk History** | Multi-country P(High) comparison |
-| **🌍 Regional Analysis** | Per-country + per-region ranking |
-| **🦠 Disease Analysis** | 5 disease cards: R², model, predicted vs actual, SHAP features |
-| **🤖 Model Performance** | Classifier + per-disease R² tables, grouped bar chart |
-| **🔍 Explainability** | Global SHAP / beeswarm / local SHAP for the current query |
-| **📊 Data & Methodology** | Dataset card, correlation heatmap, feature families, **prominent limitations box** |
-| **❓ How It Works** | 8-step pipeline walkthrough |
-| **⚙️ Settings** | Artefact status + diagnostics |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![My Risk](docs/screenshots/my_risk.png) |
+| **Risk Map** | **How It Works (incl. Model Health / Drift)** |
+| ![Risk Map](docs/screenshots/risk_map.png) | ![How it works](docs/screenshots/how_it_works.png) |
 
-## Inference layer
-
-`app/utils/predict.py` is the single source of truth for what the UI reads:
-
-- `list_countries()` — country reference rows
-- `assess(country_code, date)` — full RiskAssessment (overall class, P(High), per-disease
-  predictions and their percentile within the country's 2015-2025 history)
-- `historical_overall(country_code, n_weeks)` — recent P(High) trajectory
-- `historical_disease(country_code, disease_key, n_weeks)` — recent actual and predicted disease value
-- `regional_snapshot(date, level, task)` — per-country summary for the choropleth (overall or one disease)
-- `what_changed(country_code, date)` — Δ between the requested week and the previous one
-- `shap_global(task, top_k)` — top features by mean |SHAP|
-- `shap_local(task, row)` — feature contribution for one prediction (exact linear SHAP
-  for the scaled linear winners, TreeExplainer for RF / XGBoost)
-- `classifier_metrics_test()`, `disease_metrics_test()`, `best_disease_model_r2()`
-
-Everything is read from disk artefacts (`output/advisories.csv`,
-`output/phase6_metrics.csv`, `output/shap_*.csv`, `models/phase6/*.joblib`)
-or `data/processed/cleaned_data.csv` for the source rows that step6 didn't
-persist (raw environment columns like `temp_anomaly_celsius`, and the five
-actual disease values). Per-disease predictions aren't persisted by step6
-either, so the app runs each saved disease winner on the advisory rows'
-features once at startup (`pred_<target>` columns).
-
-### Data integrity
-
-- Every number on the dashboard is computed from real artefacts.
-- Personal-factor toggles are not implemented — the source file has no
-  individual health data. The "personalized" advisory variant from the
-  original brief is replaced by a *regional* profile (country, region,
-  income, climate, population).
-- The cardiovascular model's R² is reported as a negative value on the
-  Disease Analysis page — an honest negative result, not a bug.
-
-## Caching
-
-- `@st.cache_data` on every CSV loader (cleaned data, advisories, metrics,
-  SHAP tables). The 14,050-row cleaned panel is loaded once per session.
-- `@st.cache_resource` on the `.joblib` model loader. Models are loaded
-  once and held in memory.
-- Streamlit's standard `cache_data` warnings ("No runtime found, using
-  MemoryCacheStorageManager") appear in the bare-mode test runs — they
-  do **not** appear when the dashboard is launched normally.
-
-## Performance
-
-- First cold start: 5–10 s on commodity hardware (CSV + model loads).
-- Subsequent renders: < 800 ms for any single dashboard query.
-- All six winners are loaded once at startup, because the per-disease
-  predictions are computed when the advisory table is first loaded.
-
-## Deployment
-
-### Streamlit Community Cloud (recommended)
-
-```bash
-git push              # .gitignore excludes venv, raw data, intermediate CSVs
-# → share.streamlit.io → New app → point at app/app.py
-```
-
-### Docker
-
-```bash
-docker build -t climaguard .
-docker run --rm -p 8501:8501 climaguard
-```
-
-### Render / Railway / Fly.io
-
-Use the included `Dockerfile` — these services auto-detect it. Set the
-service port to `8501`.
-
-## Limitations
-
-- **Prototype for academic / research use** — not a clinical diagnostic tool.
-- Predicts **regional environmental risk**, not individual disease.
-- Dataset does **not** contain humidity, wind speed, UV index, elevation,
-  BMI, smoking, asthma history, or named per-disease case counts.
-- Historical dataset is **weekly** — daily granularity is not modelled.
-- Model performance varies substantially by disease target.
-- **Cardiovascular model has negative R²** — climate is a weak predictor;
-  other drivers dominate. Reported honestly.
-- Predictions should **not** be interpreted as medical advice.
-
-## Running the full pipeline from scratch
-
-```bash
-python run_all.py                # ~5 min end-to-end
-python run_all.py --skip-slow    # skip step7 SHAP
-python run_all.py --from-step 5  # resume from step 5
-```
-
-Determinism: every script pins `random_state=42`; step5/6/7 seed
-Python + NumPy + framework RNGs. Two back-to-back runs produce identical
-artefacts (SHA-256 verified across `output/*.csv/json` and `models/phase6/*.joblib`).
+More screenshots: [`docs/screenshots/`](docs/screenshots/).

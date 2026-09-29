@@ -6,12 +6,12 @@ A regional **environmental health risk nowcast** for Bangladesh. It is **not an 
 
 ```bash
 pip install -r requirements.txt
-python scripts/build_page_assets.py   # once (~4 min): precomputes artifacts/*.json
-python app.py                         # http://127.0.0.1:5000
-python -m pytest -q                   # offline (Open-Meteo is faked)
+dvc pull            # models, data and artifacts/*.json from the DVC remote (or: dvc repro)
+python app.py       # http://127.0.0.1:5000
+python -m pytest -q # offline (Open-Meteo is faked)
 ```
 
-`scripts/build_page_assets.py --only dataset eda ...` rebuilds only some assets. The slow part is `shap`, about 3 minutes for the tree models.
+The page assets in `artifacts/*.json` are built by the DVC `assets` stage (`src/stages/assets.py`). `python -m src.stages.assets --only dataset eda ...` rebuilds only some of them. The dashboard reads models and data only from the pipeline outputs; see the main README.
 
 On first start the app loads the six models (~2–8 s). It also fetches Dhaka's 2015–2025 climatology from the Open-Meteo archive once and caches it in `data/cache/dhaka_climatology.json`. A background thread then:
 - fetches the live data;
@@ -20,8 +20,6 @@ On first start the app loads the six models (~2–8 s). It also fetches Dhaka's 
 - loads the dataset rows used by the map drawer.
 
 After that, page loads don't wait on any of these. When cached data goes stale it is served immediately while a refresh runs in the background (stale-while-revalidate). The refresh interval comes from Settings.
-
-The legacy Streamlit app in `app/` is untouched.
 
 ## Pages
 
@@ -67,11 +65,11 @@ Once warm, live endpoints take about 0.2–0.4 s. `recalculate` spends 2–4 s w
 
 ## Models
 
-The dashboard uses the saved Phase 6 validation winners from `models/phase6/`. Nothing was retrained.
+The dashboard loads the validation winners saved by the DVC `train` stage (`models/best_<task>.joblib`). It never trains; which model won is read from `reports/metrics/validation_metrics.json`.
 
 | Task | Model | Test result |
 |---|---|---|
-| Overall class | Logistic Regression | from `output/phase6_metrics.csv` |
+| Overall class | Logistic Regression | from `reports/metrics/classifier_metrics.json` |
 | Respiratory, vector, waterborne | Random Forest | ″ |
 | Heat | XGBoost | ″ |
 | Cardio | ElasticNet | R² ≈ 0 → "Low reliability" everywhere |
@@ -85,12 +83,12 @@ The dashboard uses the saved Phase 6 validation winners from `models/phase6/`. N
 | Changes | Points difference against the previous snapshot. The label says what that was: "vs yesterday", "vs last snapshot" or "vs last week (dataset)" |
 | Profile adjustment | Rule-based, applied after the model, capped at ±10 per disease:<br>• asthma → resp +5<br>• high outdoor exposure → resp +5, heat +3<br>• age ≥ 65 → heat +5, cardio +5<br>• smoker → resp +3, cardio +3<br>• cardiovascular disease → cardio +5<br>• diabetes → cardio +3, heat +2<br>• BMI ≥ 30 → heat +3, cardio +2 |
 | Local SHAP | Exact linear SHAP for the linear models; TreeExplainer for RF/XGBoost. Engineered columns are grouped under friendly labels. ⟲ marks autoregressive features (past values of a disease indicator) |
-| Global SHAP (How It Works) | Mean \|SHAP\| of each saved model on 300 test weeks, recomputed by `build_page_assets.py`. The old `output/shap/*.png` files may describe other models |
-| Advisories | `pipeline/step6_advisory.py` rules and thresholds (a disease rule fires at its 80th training percentile). Cardio is deliberately excluded |
+| Global SHAP (How It Works) | Mean \|SHAP\| of each saved model on 200 test weeks, from the DVC `explain` stage (`reports/shap/`), grouped by the `assets` stage |
+| Advisories | `src/core/advisory.py` rules, thresholds from `params.yaml` (a disease rule fires at its 80th training percentile). Cardio is deliberately excluded |
 
 ### Building the live feature row
 
-1. **Weather.** Open-Meteo data (historical-forecast API for daily weather, air-quality API for PM2.5/AQI) is aggregated into 13 seven-day blocks ending today. Lags, rolling windows and interactions are derived with the same rules as `pipeline/step3_feature_engineering.py`; a unit test checks the results match the dataset exactly.
+1. **Weather.** Open-Meteo data (historical-forecast API for daily weather, air-quality API for PM2.5/AQI) is aggregated into 13 seven-day blocks ending today. Lags, rolling windows and interactions are derived with the same rules as the `featurize` stage (`src/core/features.py`); a unit test checks the results match the dataset exactly.
 2. **Temperature quantile mapping.** The dataset's `temperature_celsius` is not real °C (Bangladesh averages 11 °C, the UK −7.9 °C). A live weekly mean is placed at its percentile in Dhaka's real 2015–2025 weekly climatology, then mapped to the same percentile of the dataset's Bangladesh temperatures.
 3. **Heat-wave days.** A day counts when its max temperature is above the 95th percentile of Dhaka's 2015–2024 daily maxima.
 4. **Country context and disease lags** come from the last dataset week (2025-10-19). No live source exists for them.

@@ -70,7 +70,7 @@ food_security_index             float64  (expected 0–100)
 
 ### Flagged data-quality issues (must be cleaned in Step 1)
 
-1. **374 negative AQI readings** — AQI is physically non-negative. Treat as sensor error / sign-flip; will be clipped to 0 (or removed) in `pipeline/step1_clean_inspect.py`.
+1. **374 negative AQI readings** — AQI is physically non-negative. Treat as sensor error / sign-flip; will be clipped to 0 (or removed) in the `prepare` stage (`src/core/cleaning.py`).
 2. **3 `healthcare_access_index` values > 100** — index is bounded [0, 100]. Will be clipped to 100.
 
 ## 5. Inspection commands (reproducible)
