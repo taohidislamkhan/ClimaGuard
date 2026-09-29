@@ -56,7 +56,7 @@ def main() -> None:
         pred = best.predict(X)
         if kind == "classification":
             clf_out = {"winner": per_model[winner], **per_model}
-            pd.DataFrame({"actual": y, "predicted": pred}).to_csv(paths.PLOTS / "confusion_matrix.csv", index=False)
+            pd.DataFrame({"actual": y, "predicted": pred}).to_csv(paths.PLOTS / "confusion_matrix.csv", index=False, lineterminator="\n")
             ConfusionMatrixDisplay.from_predictions(y, pred, labels=["Low", "Medium", "High"], ax=ax,
                                                     colorbar=False, cmap="Blues")
             ax.set_title(f"Overall risk class ({M.MODEL_LABELS[winner]})")
@@ -64,7 +64,7 @@ def main() -> None:
                      *(per_model[winner][k] for k in ("accuracy", "macro_f1", "roc_auc")))
         else:
             reg_out[task] = {"winner": per_model[winner], **per_model}
-            pd.DataFrame({"actual": y, "predicted": np.round(pred, 4)}).to_csv(pva_dir / f"{task}.csv", index=False)
+            pd.DataFrame({"actual": y, "predicted": np.round(pred, 4)}).to_csv(pva_dir / f"{task}.csv", index=False, lineterminator="\n")
             ax.scatter(y, pred, s=4, alpha=0.35)
             lo, hi = float(min(y.min(), pred.min())), float(max(y.max(), pred.max()))
             ax.plot([lo, hi], [lo, hi], color="grey", lw=1)
@@ -77,7 +77,7 @@ def main() -> None:
     fig.savefig(paths.PLOTS / "test_performance.png", dpi=110)
     plt.close(fig)
 
-    pd.DataFrame(rows).to_csv(paths.MODEL_COMPARISON, index=False)
+    pd.DataFrame(rows).to_csv(paths.MODEL_COMPARISON, index=False, lineterminator="\n")
     write_json(paths.CLASSIFIER_METRICS, clf_out)
     write_json(paths.REGRESSOR_METRICS, reg_out)
 

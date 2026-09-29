@@ -128,8 +128,8 @@ def main() -> None:
                        f"the validation year (share {flagged_share:.2f} >= {p['max_flagged_share']})")
 
     paths.DRIFT.mkdir(parents=True, exist_ok=True)
-    feat.round(6).to_csv(paths.DRIFT / "feature_drift.csv", index=False)
-    perf.to_csv(paths.PLOTS / "drift_quarterly.csv", index=False)
+    feat.round(6).to_csv(paths.DRIFT / "feature_drift.csv", index=False, lineterminator="\n")
+    perf.to_csv(paths.PLOTS / "drift_quarterly.csv", index=False, lineterminator="\n")
     write_json(paths.DRIFT_REPORT, {
         "reference": "train split", "current": "test split",
         "data_drift": {

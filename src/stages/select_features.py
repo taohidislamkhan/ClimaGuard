@@ -26,7 +26,7 @@ def main() -> None:
     committee, table, summary = select(df, params["select"], params["seed"])
     features = model_features(committee)
 
-    table.to_csv(paths.RANKINGS, index=False)
+    table.to_csv(paths.RANKINGS, index=False, lineterminator="\n")
     write_json(paths.SELECTED, {"committee": committee, "model_features": features})
     write_json(paths.FEATURE_SELECTION, {**summary, "model_features": len(features)})
     log.info("%d candidates -> %d after pruning -> %d in committee -> %d model features",

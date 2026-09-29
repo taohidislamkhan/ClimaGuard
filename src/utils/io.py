@@ -30,7 +30,9 @@ def _clean(obj):
 
 def write_json(path: Path, obj, indent: int | None = 2) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_clean(obj), indent=indent, allow_nan=False) + "\n", encoding="utf-8")
+    # LF on every OS, so Git-tracked outputs hash the same after a clone.
+    path.write_text(json.dumps(_clean(obj), indent=indent, allow_nan=False) + "\n",
+                    encoding="utf-8", newline="\n")
 
 
 def read_json(path: Path):
