@@ -90,6 +90,10 @@ def concept_drift(val_df, X_val, test, X_test, p: dict) -> pd.DataFrame:
         model = load_model(paths.best_model(task))
         base = {q.quarter: v for q, v in quarterly_scores(model, kind, val_df, X_val, target).items()}
         for q, score in quarterly_scores(model, kind, test, X_test, target).items():
+            # A shorter validation window may not contain this season; comparing
+            # against another season would flag seasonality, so skip it.
+            if q.quarter not in base:
+                continue
             ref = base[q.quarter]
             if kind == "classification":
                 change, flagged = score - ref, score < ref - p["f1_tolerance"]
@@ -98,7 +102,7 @@ def concept_drift(val_df, X_val, test, X_test, p: dict) -> pd.DataFrame:
             rows.append({"task": task, "quarter": str(q), "metric": "macro_f1" if kind == "classification"
                          else "rmse", "score": score, "val_same_quarter": ref, "change": change,
                          "flagged": bool(flagged)})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=["task", "quarter", "metric", "score", "val_same_quarter", "change", "flagged"])
 
 
 def main() -> None:
@@ -118,7 +122,7 @@ def main() -> None:
 
     perf = concept_drift(val_df, val_df[features].fillna(median), test, test[features].fillna(median), p)
     flagged = perf[perf["flagged"]]
-    flagged_share = len(flagged) / len(perf)
+    flagged_share = len(flagged) / len(perf) if len(perf) else 0.0
 
     reasons = []
     if share >= p["max_drifted_share"]:

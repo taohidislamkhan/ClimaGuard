@@ -45,4 +45,15 @@ def save_model(model, path: Path) -> None:
 
 
 def load_model(path: Path):
-    return joblib.load(path)
+    """Load a model and predict single-threaded.
+
+    Random Forests trained with n_jobs=-1 also predict in parallel, summing the
+    trees in thread order, so the last float digit can change between runs.
+    One thread keeps every metric bit-for-bit reproducible.
+    """
+    model = joblib.load(path)
+    for step in getattr(model, "steps", [(None, model)]):
+        est = getattr(step[1], "model", step[1])
+        if hasattr(est, "n_jobs"):
+            est.n_jobs = 1
+    return model

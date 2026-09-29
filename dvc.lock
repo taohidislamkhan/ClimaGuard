@@ -319,6 +319,10 @@ stages:
       hash: md5
       md5: eaa6168d868f575d43ef8c9c8173ddcf
       size: 3979
+    - path: src/utils/io.py
+      hash: md5
+      md5: 7573e9c24b44e5e198f51a3ee3419764
+      size: 1844
     outs:
     - path: reports/metrics/classifier_metrics.json
       hash: md5
@@ -326,12 +330,12 @@ stages:
       size: 585
     - path: reports/metrics/model_comparison.csv
       hash: md5
-      md5: 09eba79b9b7a84aa32c8f1e2a166367d
-      size: 5187
+      md5: 986b15ed61f38518b0f94a5e3de89158
+      size: 5186
     - path: reports/metrics/regressor_metrics.json
       hash: md5
-      md5: 2b6cc223728327e5ac4a0cc5c1f2d109
-      size: 3068
+      md5: e29356dd41442ab1af46a31e5bf84691
+      size: 3066
     - path: reports/plots/confusion_matrix.csv
       hash: md5
       md5: bb71d74a564f41eaacd49efd0a7ca987
@@ -388,6 +392,10 @@ stages:
       hash: md5
       md5: b4ae033f88265c5fc08dd463b11f1e17
       size: 4183
+    - path: src/utils/io.py
+      hash: md5
+      md5: 7573e9c24b44e5e198f51a3ee3419764
+      size: 1844
     params:
       params.yaml:
         explain:
@@ -397,8 +405,8 @@ stages:
     outs:
     - path: reports/shap
       hash: md5
-      md5: 3f26e73a4e55012a1d6099ead5324df9.dir
-      size: 950688
+      md5: 97935cbae63b6a01082905bb1b6aea95.dir
+      size: 950275
       nfiles: 13
   drift:
     cmd: python -m src.stages.drift
@@ -441,13 +449,17 @@ stages:
       size: 3712
     - path: reports/shap
       hash: md5
-      md5: 3f26e73a4e55012a1d6099ead5324df9.dir
-      size: 950688
+      md5: 97935cbae63b6a01082905bb1b6aea95.dir
+      size: 950275
       nfiles: 13
     - path: src/stages/drift.py
       hash: md5
-      md5: 1d2bc9d0fa6f53cc908bd823bfb5c245
-      size: 9336
+      md5: 177aea81adebc8fa118a5bf17fec5ed3
+      size: 9664
+    - path: src/utils/io.py
+      hash: md5
+      md5: 7573e9c24b44e5e198f51a3ee3419764
+      size: 1844
     params:
       params.yaml:
         drift:
@@ -484,15 +496,15 @@ stages:
       size: 190
     - path: reports/plots/drift_quarterly.csv
       hash: md5
-      md5: e5d7d36b658a13df17363965118db4e1
-      size: 3553
+      md5: bce5d38bfa3aaf48bbc785d254e021c1
+      size: 3545
   assets:
     cmd: python -m src.stages.assets
     deps:
     - path: dashboard/inference.py
       hash: md5
-      md5: eaf0a6fb58535de829b13a210b835fa8
-      size: 7969
+      md5: 93004af8b651b92700d239138f055e22
+      size: 7990
     - path: dashboard/scoring.py
       hash: md5
       md5: b10ec8d76ba107c5654cc5917fb7d67f
@@ -547,16 +559,16 @@ stages:
       size: 1488
     - path: reports/metrics/model_comparison.csv
       hash: md5
-      md5: 09eba79b9b7a84aa32c8f1e2a166367d
-      size: 5187
+      md5: 986b15ed61f38518b0f94a5e3de89158
+      size: 5186
     - path: reports/metrics/validation_metrics.json
       hash: md5
       md5: 5beadd58179ea08bbd61b82d72f1d905
       size: 3807
     - path: reports/shap
       hash: md5
-      md5: 3f26e73a4e55012a1d6099ead5324df9.dir
-      size: 950688
+      md5: 97935cbae63b6a01082905bb1b6aea95.dir
+      size: 950275
       nfiles: 13
     - path: src/stages/assets.py
       hash: md5

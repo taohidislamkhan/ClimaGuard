@@ -97,6 +97,7 @@ stages:
       - models/preprocess.json
       - reports/metrics/validation_metrics.json
       - src/stages/evaluate.py
+      - src/utils/io.py
       - src/core/models.py
     outs:
       - reports/metrics/model_comparison.csv:
@@ -133,6 +134,7 @@ stages:
       - models/preprocess.json
       - reports/metrics/validation_metrics.json
       - src/stages/explain.py
+      - src/utils/io.py
     params:
       - seed
       - explain
@@ -153,6 +155,7 @@ stages:
       - models/preprocess.json
       - reports/shap
       - src/stages/drift.py
+      - src/utils/io.py
     params:
       - drift
     outs:

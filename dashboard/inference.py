@@ -24,7 +24,6 @@ import json
 import warnings
 from dataclasses import dataclass
 
-import joblib
 import numpy as np
 import pandas as pd
 
@@ -32,6 +31,7 @@ from src.core.features import drop_first_week
 from src.core.models import MODEL_LABELS
 from src.utils import paths
 from src.utils.config import load_params
+from src.utils.io import load_model
 
 ROOT = paths.ROOT
 MODEL_DIR = paths.MODELS
@@ -125,7 +125,7 @@ class ModelStore:
                                     "— run `dvc pull` (or `dvc repro`).")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            self.models = {k: joblib.load(MODEL_DIR / f) for k, f in TASKS.items()}
+            self.models = {k: load_model(MODEL_DIR / f) for k, f in TASKS.items()}
 
         self.features: list[str] = list(self.models["overall"].feature_names_in_)
         for k, m in self.models.items():
