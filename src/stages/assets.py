@@ -1,12 +1,10 @@
-"""Precompute the heavy, static page assets into ``artifacts/*.json``.
+"""Stage 9 - assets: precompute the dashboard's static page data into ``artifacts/*.json``.
 
-Run once after the pipeline (and again whenever models or data change)::
+    dvc repro assets        (or: python -m src.stages.assets [--only shap metrics])
 
-    python scripts/build_page_assets.py
-
-Everything is derived from files already in the repo — the raw and processed
-datasets, ``output/*`` pipeline results and the saved models in
-``models/phase6``. Nothing here is hand-typed.
+Everything is derived from pipeline outputs — the raw and cleaned data,
+``data/processed/features.parquet``, ``reports/`` and the saved winners in
+``models/``. Nothing here is hand-typed.
 
 Outputs
 -------
@@ -16,7 +14,7 @@ correlation.json       Pearson matrix of the key variables (cleaned data)
 eda.json               temperature-vs-heat scatter + bins, monthly seasonal indices
 features.json          feature-family counts and the selection funnel
 metrics.json           all 24 models x val/test from phase6_metrics.csv + winners
-shap_global.json       mean |SHAP| of each SAVED winner on a test sample
+shap_global.json       mean |SHAP| of each saved winner (from reports/shap, grouped labels)
 test_predictions.json  predicted vs actual per disease on the test split
 country_map.json       model scores per country per test week (Risk Map)
 bgd_history.json       model scores for every Bangladesh week (Risk History)
@@ -26,29 +24,26 @@ seasonality.json       month x disease average percentile of observed values
 from __future__ import annotations
 
 import json
-import sys
 import time
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+from dashboard import scoring, shap_utils
+from dashboard.inference import MODEL_NAMES, TARGETS, ModelStore
+from src.core.features import drop_first_week
+from src.utils import paths
+from src.utils.config import load_params
+
 warnings.filterwarnings("ignore")
 
-from dashboard import scoring, shap_utils  # noqa: E402
-from dashboard.inference import (  # noqa: E402
-    FEATURED_PATH, MODEL_NAMES, TARGETS, TRAIN_END_DATE, ModelStore,
-)
-
-RAW = ROOT / "data" / "raw" / "global_climate_health_impact_tracker_2015_2025.csv"
-CLEAN = ROOT / "data" / "processed" / "cleaned_data.csv"
-OUT = ROOT / "output"
-ART = ROOT / "artifacts"
-VAL_END = "2023-12-31"
-SEED = 42
+PARAMS = load_params()
+ART = paths.ARTIFACTS
+TRAIN_END_DATE = PARAMS["split"]["train_end"]
+VAL_END = PARAMS["split"]["val_end"]
+SEED = PARAMS["seed"]
+SAMPLES = PARAMS["assets"]
 DISEASES = ["respiratory", "vector", "heat", "waterborne", "cardio"]
 KEY_VARS = ["temperature_celsius", "precipitation_mm", "heat_wave_days", "pm25_ugm3",
             "air_quality_index", "healthcare_access_index", "gdp_per_capita_usd",
@@ -68,7 +63,7 @@ def write(name: str, obj) -> None:
     ART.mkdir(exist_ok=True)
     path = ART / name
     path.write_text(json.dumps(obj, separators=(",", ":"), allow_nan=False))
-    print(f"  wrote {path.relative_to(ROOT)} ({path.stat().st_size / 1024:.0f} KB)")
+    print(f"  wrote {path.relative_to(paths.ROOT)} ({path.stat().st_size / 1024:.0f} KB)")
 
 
 def r(x, nd=3):
@@ -110,7 +105,7 @@ def build_correlation_and_eda(clean: pd.DataFrame) -> None:
                                "matrix": corr.values.tolist()})
 
     rng = np.random.default_rng(SEED)
-    idx = rng.choice(len(clean), size=min(1500, len(clean)), replace=False)
+    idx = rng.choice(len(clean), size=min(SAMPLES["eda_sample"], len(clean)), replace=False)
     sample = clean.iloc[idx]
     bins = np.arange(np.floor(clean["temperature_celsius"].min()), clean["temperature_celsius"].max() + 2, 2)
     cut = pd.cut(clean["temperature_celsius"], bins)
@@ -133,10 +128,9 @@ def build_correlation_and_eda(clean: pd.DataFrame) -> None:
     })
 
 
-def build_features(store: ModelStore) -> None:
-    meta = json.loads((OUT / "feature_selection_meta.json").read_text())
-    sel = pd.read_csv(OUT / "feature_selection.csv")
-    cols = pd.read_csv(FEATURED_PATH, nrows=0).columns
+def build_features(store: ModelStore, cols: list[str]) -> None:
+    meta = json.loads(paths.FEATURE_SELECTION.read_text())
+    sel = pd.read_csv(paths.RANKINGS)
     fam = {
         "Rolling windows (4/8/12 w)": sum("_roll_" in c for c in cols),
         "Lags (1/2/4/8 w)": sum("_lag" in c for c in cols),
@@ -147,15 +141,15 @@ def build_features(store: ModelStore) -> None:
     write("features.json", {
         "families": fam,
         "funnel": [
-            {"stage": "Engineered columns", "n": meta["input_cols"]},
+            {"stage": "Engineered columns", "n": len(cols)},
             {"stage": "Numeric candidates", "n": meta["candidate_features"]},
-            {"stage": f"After |r| > {meta['corr_drop_threshold']} de-duplication", "n": meta["after_dedup"]},
-            {"stage": f"Committee vote (≥{meta['min_votes']} of 3 rankings, top {meta['top_k']} cap)",
+            {"stage": f"After |r| > {meta['corr_threshold']} de-duplication", "n": meta["after_dedup"]},
+            {"stage": f"Committee vote (≥{meta['votes_needed']} of 3 rankings, top {PARAMS['select']['top_k']} cap)",
              "n": meta["survivors_with_min_votes"]},
             {"stage": "Used by the models (targets removed)", "n": len(store.features)},
         ],
         "methods": [
-            {"name": "Correlation filter", "detail": f"drop one of each pair with |r| > {meta['corr_drop_threshold']}"},
+            {"name": "Correlation filter", "detail": f"drop one of each pair with |r| > {meta['corr_threshold']}"},
             {"name": "Pearson correlation", "detail": "rank by |r| with the target"},
             {"name": "Mutual information", "detail": "rank by non-linear dependence"},
             {"name": "Random Forest importance", "detail": "rank by impurity importance"},
@@ -166,44 +160,28 @@ def build_features(store: ModelStore) -> None:
 
 
 def build_metrics() -> dict:
-    m = pd.read_csv(OUT / "phase6_metrics.csv")
-    winners = {t: v["model"] for t, v in
-               json.loads((OUT / "phase6_run_summary.json").read_text())["best_per_task"].items()}
+    m = pd.read_csv(paths.MODEL_COMPARISON)
+    winners = json.loads(paths.VALIDATION_METRICS.read_text())["winners"]
     rows = json.loads(m.to_json(orient="records"))
     write("metrics.json", {"rows": rows, "winners": winners})
     return winners
 
 
-def build_shap_global(store: ModelStore, X_test: pd.DataFrame) -> None:
-    sample = X_test.sample(n=min(300, len(X_test)), random_state=SEED)
+def build_shap_global() -> None:
+    """Group the explain stage's per-feature mean |SHAP| under friendly labels."""
     out = {}
-    for task, model in store.models.items():
-        t0 = time.time()
-        steps = getattr(model, "steps", None)
-        final = steps[-1][1] if steps else model
-        if hasattr(final, "coef_") and steps:
-            z = np.asarray(model[:-1].transform(sample), dtype=float)
-            coef = np.asarray(final.coef_, dtype=float)
-            if coef.ndim == 2:
-                hi = list(final.classes_).index("High") if hasattr(final, "classes_") and coef.shape[0] > 1 else 0
-                coef = coef[hi]
-            sv = z * coef
-        else:
-            from shap import TreeExplainer
-            sv = np.asarray(TreeExplainer(final).shap_values(sample))
-        mean_abs = np.abs(sv).mean(axis=0)
-        df = pd.DataFrame({"feature": store.features, "mean_abs": mean_abs})
+    for task in ["overall"] + list(TARGETS):
+        rep = json.loads((paths.SHAP / f"{'overall_classifier' if task == 'overall' else task}.json").read_text())
+        df = pd.DataFrame(rep["importance"])
         df["label"] = df["feature"].map(shap_utils.friendly_label)
         grouped = df.groupby("label")["mean_abs"].sum().sort_values(ascending=False)
         out[task] = {
-            "model": MODEL_NAMES[task], "n_rows": len(sample),
-            "features": df.sort_values("mean_abs", ascending=False).head(12)
-                          .assign(mean_abs=lambda d: d["mean_abs"].round(4))[["feature", "label", "mean_abs"]]
+            "model": MODEL_NAMES[task], "n_rows": rep["n_rows"],
+            "features": df.head(12).assign(mean_abs=lambda d: d["mean_abs"].round(4))[["feature", "label", "mean_abs"]]
                           .to_dict("records"),
             "grouped": [{"label": k, "mean_abs": round(float(v), 4)} for k, v in grouped.head(8).items()],
-            "unit": "High-class log-odds" if task == "overall" else f"{TARGETS[task]} units",
+            "unit": rep["unit"],
         }
-        print(f"  shap {task}: {time.time() - t0:.1f}s")
     write("shap_global.json", out)
 
 
@@ -223,7 +201,7 @@ def build_predictions(store: ModelStore, fd: pd.DataFrame, X: pd.DataFrame, name
     for k in DISEASES:
         y, yhat = fd.loc[test, TARGETS[k]].to_numpy(float), dis.loc[test, k].to_numpy(float)
         ss_res, ss_tot = ((y - yhat) ** 2).sum(), ((y - y.mean()) ** 2).sum()
-        pick = rng.choice(len(y), size=min(700, len(y)), replace=False)
+        pick = rng.choice(len(y), size=min(SAMPLES["scatter_sample"], len(y)), replace=False)
         bgd = test & (fd["country_name"] == "Bangladesh").to_numpy()
         tp[k] = {
             "target": TARGETS[k], "model": MODEL_NAMES[k], "n": int(len(y)),
@@ -280,12 +258,13 @@ def main(only: list[str] | None = None) -> None:
     steps = set(only or STEPS)
     t0 = time.time()
     print("[assets] loading data and models ...")
-    raw = pd.read_csv(RAW)
-    clean = pd.read_csv(CLEAN)
+    raw = pd.read_csv(paths.RAW_CSV)
+    clean = pd.read_parquet(paths.CLEAN)
+    clean["date"] = clean["date"].dt.strftime("%Y-%m-%d")
     store = ModelStore()
-    fd = pd.read_csv(FEATURED_PATH, parse_dates=["date"])
-    lag1 = [c for c in fd.columns if c.endswith("_lag1w")][0]
-    fd = fd[fd[lag1].notna()].reset_index(drop=True)
+    fd = pd.read_parquet(paths.FEATURES)
+    cols = list(fd.columns)
+    fd = drop_first_week(fd)
     X = store.to_matrix(fd)
     names = dict(raw[["country_code", "country_name"]].drop_duplicates().values)
 
@@ -294,11 +273,11 @@ def main(only: list[str] | None = None) -> None:
     if "eda" in steps:
         build_correlation_and_eda(clean)
     if "features" in steps:
-        build_features(store)
+        build_features(store, cols)
     if "metrics" in steps:
         build_metrics()
-    if "shap" in steps:          # slow: ~3 min for the tree models
-        build_shap_global(store, X[(fd["date"] > VAL_END).to_numpy()])
+    if "shap" in steps:
+        build_shap_global()
     if "predictions" in steps:
         build_predictions(store, fd, X, names)
     if "seasonality" in steps:

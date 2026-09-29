@@ -1,0 +1,111 @@
+# Every tunable value used by the DVC stages lives here.
+# Change a value, run `dvc status` to see which stages it affects, then `dvc repro`.
+
+seed: 42
+
+prepare:
+  # Rates, counts and concentrations that cannot be negative.
+  non_negative_cols:
+    - air_quality_index
+    - pm25_ugm3
+    - respiratory_disease_rate
+    - cardio_mortality_rate
+    - vector_disease_risk_score
+    - waterborne_disease_incidents
+    - heat_related_admissions
+    - heat_wave_days
+    - extreme_weather_events
+    - precipitation_mm
+  binary_cols: [drought_indicator, flood_indicator]
+  index_0_100_cols: [healthcare_access_index, mental_health_index, food_security_index]
+  dedup_keys: [country_code, year, week]
+
+featurize:
+  # Rolling mean / sum / max over these columns, per country.
+  roll_cols:
+    - temperature_celsius
+    - pm25_ugm3
+    - air_quality_index
+    - precipitation_mm
+    - heat_wave_days
+    - extreme_weather_events
+    - waterborne_disease_incidents
+  # Lagged copies of these columns, per country.
+  lag_cols:
+    - temperature_celsius
+    - pm25_ugm3
+    - air_quality_index
+    - precipitation_mm
+    - heat_wave_days
+    - extreme_weather_events
+    - waterborne_disease_incidents
+    - heat_related_admissions
+  rolling_windows: [4, 8, 12]     # weeks
+  lags: [1, 2, 4, 8]              # weeks
+  interactions:                   # [column_a, column_b, new_name]
+    - [temperature_celsius, pm25_ugm3, temp_x_pm25]
+    - [precipitation_mm, temperature_celsius, rain_x_temp]
+    - [pm25_ugm3, air_quality_index, pm25_x_aqi]
+  categorical: [country_code, region, income_level, climate_zone]
+
+label:
+  # Low / Medium / High = tertiles of health_impact_score, cut on years <= train_end_year.
+  train_end_year: 2023
+  composite_cols:
+    - heat_related_admissions
+    - respiratory_disease_rate
+    - cardio_mortality_rate
+    - vector_disease_risk_score
+    - waterborne_disease_incidents
+    - pm25_ugm3
+    - temperature_celsius
+
+select:
+  target: health_impact_score
+  corr_threshold: 0.95   # drop a feature whose |r| with an already-kept feature is above this
+  min_votes: 2           # a feature must be in the top half of >= 2 of the 3 rankings
+  top_k: 60              # cap on the committee size (by mean rank)
+  mi_sample: 4000        # rows used for mutual information
+  rf_trees: 200          # trees in the importance forest
+
+split:
+  train_end: "2022-12-31"   # train = up to and including this date
+  val_end: "2023-12-31"     # validation = (train_end, val_end]; test = after val_end
+
+train:
+  n_jobs: -1   # Random Forest only; RF trees do not depend on n_jobs
+  logreg: {C: 1.0, l1_ratio: 0.5, max_iter: 2000}
+  elasticnet: {alpha: 0.5, l1_ratio: 0.5, max_iter: 5000}
+  dt: {max_depth: 12, min_samples_leaf: 20}
+  rf: {n_estimators: 200, min_samples_leaf: 5}
+  xgb: {n_estimators: 300, max_depth: 6, learning_rate: 0.1}
+
+explain:
+  sample_size: 300   # test rows explained per model (TreeExplainer on RF is slow)
+  top_k: 15          # features shown in the plots
+
+drift:
+  psi_threshold: 0.2     # PSI >= 0.2 = significant shift
+  ks_pvalue: 0.05        # KS test must also reject "same distribution"
+  psi_bins: 10           # quantile bins taken from the reference (train) period
+  top_n_features: 15     # "top model features" = top-N by mean |SHAP| of the overall classifier
+  max_drifted_share: 0.3 # recommend retraining if this share of top features drifted
+  f1_tolerance: 0.05     # classifier quarter flagged if macro-F1 drops > 0.05 vs the same quarter of 2023
+  rmse_tolerance: 0.20   # regressor quarter flagged if RMSE is > 20% higher than the same quarter of 2023
+  max_flagged_share: 0.25 # recommend retraining if >= 25% of task-quarters are flagged
+  # Tasks checked for concept drift. Cardio is left out: its validation R² is ~0,
+  # so a drop below it would be noise, not drift.
+  concept_tasks: [overall_classifier, respiratory, vector, heat, waterborne]
+
+advisory:
+  # A disease advisory fires when the prediction is above this quantile of the
+  # training-period target (0.80 = top quintile). Cardio has no rule (R² ~ 0).
+  respiratory_q: 0.80
+  vector_q: 0.80
+  waterborne_q: 0.80
+  heat_q: 0.80
+
+assets:
+  shap_sample: 300       # test rows for the dashboard's global SHAP bars
+  scatter_sample: 700    # points in the predicted-vs-actual scatter
+  eda_sample: 1500       # points in the temperature-vs-heat scatter
