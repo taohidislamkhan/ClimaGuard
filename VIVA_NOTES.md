@@ -239,26 +239,40 @@ dvc repro
 # edit params.yaml: train.rf.n_estimators: 200 -> 100
 dvc status          # train: changed params: train.rf.n_estimators
 dvc repro           # prepare..split skipped; train, evaluate, explain, drift, assets rerun
-dvc params diff
-dvc metrics diff
-git checkout params.yaml   # revert
-dvc repro                  # back to the committed results (or: git checkout dvc.lock; dvc checkout)
+dvc params diff     # train.rf.n_estimators  200 -> 100
+dvc metrics diff    # rf.* moves; the other models do not
+# revert WITHOUT retraining: the old models are still in the DVC cache
+git checkout HEAD -- params.yaml dvc.lock reports data/processed models/preprocess.json
+dvc checkout
+dvc status          # Data and pipelines are up to date.
 ```
-**Expect:** `dvc status` names only `train` (and downstream after it runs);
-`dvc metrics diff` shows the Random Forest numbers moving slightly while the
-winner (Logistic Regression) is unchanged.
+**Expect:** `dvc status` names only `train`. `dvc repro` prints
+"didn't change, skipping" for prepare, featurize, select_features, split and
+"Running stage" for train, evaluate, explain, drift, assets (≈ 5 min).
+`dvc metrics diff` (what we got): classifier `rf.accuracy` 0.8094 → 0.8119,
+`rf.macro_f1` 0.8091 → 0.8117; regressor `rf` R² changes ≤ 0.005; the
+selected Logistic Regression is unchanged.
+Use `git checkout HEAD --` (not `git checkout --`): DVC's autostage has
+already staged the new `dvc.lock`.
 *"Only stages that depend on `train` params rerun. The data stages are skipped.
-`dvc metrics diff` compares the new metrics with the last commit."*
+`dvc metrics diff` compares the new metrics with the last commit. To go back,
+Git restores the old `dvc.lock` and `dvc checkout` copies the old models out
+of the cache — no retraining."*
 (`train` takes about 4 minutes; say this before starting.)
 
 ### 7. `dvc metrics show`
 ```bash
-dvc metrics show
+dvc metrics show reports/metrics/classifier_metrics.json
+dvc metrics show reports/metrics/regressor_metrics.json
+dvc metrics show reports/metrics/drift_metrics.json
+dvc metrics show --md          # everything, as a (wide) markdown table
 ```
-**Expect:** a table with `classifier_metrics.json` (winner.accuracy ≈ 0.820,
+Plain `dvc metrics show` puts all 8 files in one very wide table, so show
+them one file at a time. **Expect:** a table with `classifier_metrics.json` (winner.accuracy ≈ 0.820,
 winner.macro_f1 ≈ 0.819, winner.roc_auc ≈ 0.944, rf.accuracy ≈ 0.809 …),
 `regressor_metrics.json` (vector.winner.r2 ≈ 0.916, heat ≈ 0.832 …),
-`drift_report.json`, `data_quality.json` (negative_aqi_fixed = 374), etc.
+`drift_metrics.json` (retrain_recommended False, data_max_psi 0.2574),
+`data_quality.json` (negative_aqi_fixed = 374), etc.
 *"These JSON files are declared as metrics and tracked in Git, so every commit
 has its results."*
 
@@ -301,7 +315,8 @@ cat reports/drift/drift_report.json      # retrain_recommended, data_drift, conc
 # params.yaml: split.train_end "2023-12-31", split.val_end "2024-06-30"
 dvc repro
 dvc metrics diff
-git checkout params.yaml; git checkout dvc.lock; dvc checkout     # revert
+git checkout HEAD -- params.yaml dvc.lock reports data/processed models/preprocess.json
+dvc checkout                                                          # revert
 ```
 *"Our response policy: when drift is found we retrain on newer weeks by moving
 the split dates. DVC reruns split onward and `dvc metrics diff` shows the
