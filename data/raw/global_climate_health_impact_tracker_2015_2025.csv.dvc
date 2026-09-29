@@ -1,0 +1,5 @@
+outs:
+- md5: ed50c623def57c57fa5f719a302254d9
+  size: 2213853
+  hash: md5
+  path: global_climate_health_impact_tracker_2015_2025.csv

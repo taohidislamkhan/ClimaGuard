@@ -1,80 +1,45 @@
 # --- Python ---
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
-# --- Virtualenvs (both names used in this repo) ---
+# --- Virtual environments ---
 venv/
 .venv/
-ENV/
 env/
 
-# --- Editor / IDE ---
+# --- Secrets (DVC remote credentials live in .dvc/config.local) ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Editor / IDE / OS ---
 .vscode/
 .idea/
+.puku/
 *.swp
-*.swo
 .DS_Store
 Thumbs.db
-
-# --- Jupyter / scratch notebooks ---
 .ipynb_checkpoints/
-*.ipynb
 
-# --- Puku agent state (this editor) ---
-.puku/
+# --- Data and models: tracked by DVC, never by Git ---
+# (DVC adds the exact output paths to the .gitignore files next to them;
+#  these broader rules are a safety net.)
+/data/raw/*.csv
+/data/interim/
+/data/processed/*.parquet
+/models/**/*.joblib
+/models/**/*.pkl
+/artifacts/
+/reports/shap/
 
-# --- Raw data: huge, reproducible via step1 if needed ---
-data/raw/
-*.csv.gz
-
-# --- Intermediate pipeline outputs that step3+ regenerate ---
-# (Step 1 writes data/processed/cleaned_data.csv, which is small and required.)
-# feature_engineering writes featured_data.csv (14 MB) — keep only for development;
-# step 3 regenerates it deterministically on demand.
-data/processed/featured_data.csv
-
-# --- OLD model files (replaced by Phase 6 winners under models/phase6/) ---
-
-# --- Streamlit caches ---
-.streamlit/secrets.toml
-
-# --- Local audit / log files ---
-*.log
-*.tmp
-_*.txt
-_h*.txt
-_run*.txt
-_metrics*.csv
-_adv*.csv
-_rs*.json
-_as*.json
-_shap_*
-_*.py
-_p.txt
-
-# --- Flask dashboard runtime state ---
+# --- Dashboard runtime state ---
 data/cache/risk_history.db
 
-# --- Large local-only files (editor index, exceeds GitHub 100 MB limit) ---
-.puku/
+# --- Logs / scratch ---
+*.log
+*.tmp
