@@ -503,8 +503,8 @@ stages:
     deps:
     - path: dashboard/inference.py
       hash: md5
-      md5: 93004af8b651b92700d239138f055e22
-      size: 7990
+      md5: 4c9b31f40b18d36ece8cacec50e4241d
+      size: 8160
     - path: dashboard/scoring.py
       hash: md5
       md5: b10ec8d76ba107c5654cc5917fb7d67f
