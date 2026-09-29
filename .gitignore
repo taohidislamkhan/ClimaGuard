@@ -43,3 +43,6 @@ data/cache/risk_history.db
 # --- Logs / scratch ---
 *.log
 *.tmp
+
+# --- DVC plot renders (dvc plots show) ---
+dvc_plots/

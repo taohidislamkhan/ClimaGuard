@@ -1,0 +1,8 @@
+{
+  "retrain_recommended": false,
+  "data_drifted_features": 1,
+  "data_top_features_drifted": 0,
+  "data_max_psi": 0.2574,
+  "concept_flagged_quarters": 0,
+  "concept_flagged_share": 0.0
+}

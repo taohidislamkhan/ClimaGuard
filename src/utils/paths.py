@@ -36,6 +36,7 @@ CLASSIFIER_METRICS = METRICS / "classifier_metrics.json"
 REGRESSOR_METRICS = METRICS / "regressor_metrics.json"
 MODEL_COMPARISON = METRICS / "model_comparison.csv"
 DRIFT_REPORT = DRIFT / "drift_report.json"
+DRIFT_METRICS = METRICS / "drift_metrics.json"
 
 # dashboard assets
 ARTIFACTS = ROOT / "artifacts"

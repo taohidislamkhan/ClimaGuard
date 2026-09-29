@@ -446,8 +446,8 @@ stages:
       nfiles: 13
     - path: src/stages/drift.py
       hash: md5
-      md5: 513256e0f819c5b2c758636a0c345f7d
-      size: 8782
+      md5: 1d2bc9d0fa6f53cc908bd823bfb5c245
+      size: 9336
     params:
       params.yaml:
         drift:
@@ -478,10 +478,14 @@ stages:
       hash: md5
       md5: 19f2f22d5422add555ece1bc3bb9a639
       size: 3746
+    - path: reports/metrics/drift_metrics.json
+      hash: md5
+      md5: 658d535cc3186257ac289e4ebacf008b
+      size: 190
     - path: reports/plots/drift_quarterly.csv
       hash: md5
-      md5: e772581905b0a44d4f46614e146d8be1
-      size: 3551
+      md5: e5d7d36b658a13df17363965118db4e1
+      size: 3553
   assets:
     cmd: python -m src.stages.assets
     deps:

@@ -15,7 +15,8 @@ Response       retrain_recommended = too many top features drifted, or the
                share of flagged quarters >= drift.max_flagged_share. The policy: move split.train_end / val_end
                forward in params.yaml and run `dvc repro`.
 
-Out: reports/drift/drift_report.json   (metrics)
+Out: reports/drift/drift_report.json   (full report, read by the dashboard)
+     reports/metrics/drift_metrics.json  (numbers only, for dvc metrics)
      reports/drift/feature_drift.csv
      reports/plots/drift_quarterly.csv (plots)
      reports/drift/drift.png
@@ -150,6 +151,16 @@ def main() -> None:
         "response": "Move split.train_end and split.val_end forward in params.yaml so the newest "
                     "weeks are learned from, then run `dvc repro` and compare with `dvc metrics diff`.",
         "thresholds": p,
+    })
+
+    # Numbers only, so `dvc metrics show` / `dvc metrics diff` stay readable.
+    write_json(paths.DRIFT_METRICS, {
+        "retrain_recommended": bool(reasons),
+        "data_drifted_features": int(feat["drifted"].sum()),
+        "data_top_features_drifted": len(top_drifted),
+        "data_max_psi": round(float(feat["psi"].max()), 4),
+        "concept_flagged_quarters": len(flagged),
+        "concept_flagged_share": round(flagged_share, 4),
     })
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))

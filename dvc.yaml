@@ -160,8 +160,10 @@ stages:
           cache: false
       - reports/drift/drift.png:
           cache: false
-    metrics:
       - reports/drift/drift_report.json:
+          cache: false
+    metrics:
+      - reports/metrics/drift_metrics.json:
           cache: false
     plots:
       - reports/plots/drift_quarterly.csv:
