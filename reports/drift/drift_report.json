@@ -1,0 +1,67 @@
+{
+  "reference": "train split",
+  "current": "test split",
+  "data_drift": {
+    "n_features": 51,
+    "n_drifted": 1,
+    "top_features_checked": 15,
+    "top_features_drifted": 0,
+    "top_drifted_share": 0.0,
+    "top_drifted": [],
+    "max_psi": 0.2574,
+    "worst": [
+      {
+        "feature": "gdp_per_capita_usd",
+        "psi": 0.2574,
+        "ks_pvalue": 0.0
+      },
+      {
+        "feature": "pm25_ugm3_roll_max_12w",
+        "psi": 0.0632,
+        "ks_pvalue": 0.0
+      },
+      {
+        "feature": "week",
+        "psi": 0.0528,
+        "ks_pvalue": 0.0
+      },
+      {
+        "feature": "month",
+        "psi": 0.051,
+        "ks_pvalue": 0.0
+      },
+      {
+        "feature": "precipitation_mm_roll_sum_12w",
+        "psi": 0.0337,
+        "ks_pvalue": 0.0
+      }
+    ]
+  },
+  "concept_drift": {
+    "n_windows": 40,
+    "n_flagged": 0,
+    "flagged_share": 0.0,
+    "flagged_by_task": {},
+    "flagged": []
+  },
+  "retrain_recommended": false,
+  "reasons": [],
+  "response": "Move split.train_end and split.val_end forward in params.yaml so the newest weeks are learned from, then run `dvc repro` and compare with `dvc metrics diff`.",
+  "thresholds": {
+    "psi_threshold": 0.2,
+    "ks_pvalue": 0.05,
+    "psi_bins": 10,
+    "top_n_features": 15,
+    "max_drifted_share": 0.3,
+    "f1_tolerance": 0.05,
+    "rmse_tolerance": 0.2,
+    "max_flagged_share": 0.25,
+    "concept_tasks": [
+      "overall_classifier",
+      "respiratory",
+      "vector",
+      "heat",
+      "waterborne"
+    ]
+  }
+}

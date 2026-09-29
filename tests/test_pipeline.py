@@ -47,6 +47,14 @@ def test_split_is_chronological_and_disjoint():
 
 
 @needs_outputs
+def test_readme_results_match_metrics():
+    from src.utils.readme_tables import END, README, START, render
+    text = README.read_text(encoding="utf-8")
+    assert text.split(START, 1)[1].split(END, 1)[0].strip() == render().strip(), \
+        "run `python -m src.utils.readme_tables`"
+
+
+@needs_outputs
 def test_no_target_is_a_model_feature():
     features = json.loads(paths.SELECTED.read_text())["model_features"]
     from src.core.models import ALL_TARGETS

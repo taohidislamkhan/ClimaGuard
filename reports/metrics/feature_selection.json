@@ -1,0 +1,62 @@
+{
+  "candidate_features": 161,
+  "corr_threshold": 0.95,
+  "dropped_near_duplicates": 53,
+  "after_dedup": 108,
+  "votes_needed": 2,
+  "survivors_with_min_votes": 55,
+  "committee_size": 55,
+  "examples_dropped": [
+    {
+      "drop": "temperature_celsius_roll_mean_4w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9842
+    },
+    {
+      "drop": "temperature_celsius_roll_sum_4w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9836
+    },
+    {
+      "drop": "temperature_celsius_roll_max_4w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9803
+    },
+    {
+      "drop": "temperature_celsius_lag1w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9674
+    },
+    {
+      "drop": "temperature_celsius_roll_mean_8w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9646
+    },
+    {
+      "drop": "temperature_celsius_roll_sum_8w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.962
+    },
+    {
+      "drop": "temperature_celsius_lag2w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9613
+    },
+    {
+      "drop": "temperature_celsius_roll_max_8w",
+      "kept": "temperature_celsius",
+      "abs_corr": 0.9598
+    },
+    {
+      "drop": "temperature_celsius_roll_mean_12w",
+      "kept": "temperature_celsius_lag4w",
+      "abs_corr": 0.9809
+    },
+    {
+      "drop": "temperature_celsius_roll_sum_12w",
+      "kept": "temperature_celsius_lag4w",
+      "abs_corr": 0.9798
+    }
+  ],
+  "model_features": 51
+}

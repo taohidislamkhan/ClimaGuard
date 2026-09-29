@@ -1,0 +1,36 @@
+{
+  "raw_rows": 14100,
+  "raw_columns": 30,
+  "raw_nulls": 0,
+  "clean_rows": 14050,
+  "clean_columns": 33,
+  "countries": 25,
+  "negative_aqi_fixed": 374,
+  "healthcare_over_100_fixed": 3,
+  "rows_removed": 50,
+  "fixed_by_rule": {
+    "clipped_negative_to_0": {
+      "air_quality_index": 374,
+      "pm25_ugm3": 0,
+      "respiratory_disease_rate": 0,
+      "cardio_mortality_rate": 0,
+      "vector_disease_risk_score": 0,
+      "waterborne_disease_incidents": 0,
+      "heat_related_admissions": 0,
+      "heat_wave_days": 0,
+      "extreme_weather_events": 0,
+      "precipitation_mm": 0
+    },
+    "forced_binary": {
+      "drought_indicator": 0,
+      "flood_indicator": 0
+    },
+    "clipped_to_0_100": {
+      "healthcare_access_index": 3,
+      "mental_health_index": 0,
+      "food_security_index": 0
+    },
+    "dropped_full_duplicates": 0,
+    "dropped_duplicate_keys": 50
+  }
+}

@@ -1,0 +1,199 @@
+stages:
+  prepare:
+    cmd: python -m src.stages.prepare
+    deps:
+      - data/raw/global_climate_health_impact_tracker_2015_2025.csv
+      - src/stages/prepare.py
+      - src/core/cleaning.py
+    params:
+      - prepare
+    outs:
+      - data/interim/clean.parquet
+    metrics:
+      - reports/metrics/data_quality.json:
+          cache: false
+
+  featurize:
+    cmd: python -m src.stages.featurize
+    deps:
+      - data/interim/clean.parquet
+      - src/stages/featurize.py
+      - src/core/features.py
+    params:
+      - featurize
+      - label
+    outs:
+      - data/processed/features.parquet
+    metrics:
+      - reports/metrics/featurize.json:
+          cache: false
+
+  select_features:
+    cmd: python -m src.stages.select_features
+    deps:
+      - data/processed/features.parquet
+      - src/stages/select_features.py
+      - src/core/selection.py
+    params:
+      - seed
+      - select
+    outs:
+      - data/processed/selected_features.json:
+          cache: false
+      - data/processed/feature_rankings.csv:
+          cache: false
+    metrics:
+      - reports/metrics/feature_selection.json:
+          cache: false
+
+  split:
+    cmd: python -m src.stages.split
+    deps:
+      - data/processed/features.parquet
+      - data/processed/selected_features.json
+      - src/stages/split.py
+    params:
+      - split
+    outs:
+      - data/processed/train.parquet
+      - data/processed/val.parquet
+      - data/processed/test.parquet
+    metrics:
+      - reports/metrics/split_summary.json:
+          cache: false
+
+  train:
+    cmd: python -m src.stages.train
+    deps:
+      - data/processed/train.parquet
+      - data/processed/val.parquet
+      - data/processed/selected_features.json
+      - src/stages/train.py
+      - src/core/models.py
+    params:
+      - seed
+      - train
+      - split.train_end
+    outs:
+      - models/candidates
+      - models/best_overall_classifier.joblib
+      - models/best_respiratory.joblib
+      - models/best_cardio.joblib
+      - models/best_vector.joblib
+      - models/best_waterborne.joblib
+      - models/best_heat.joblib
+      - models/preprocess.json:
+          cache: false
+    metrics:
+      - reports/metrics/validation_metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python -m src.stages.evaluate
+    deps:
+      - data/processed/test.parquet
+      - data/processed/val.parquet
+      - models/candidates
+      - models/preprocess.json
+      - reports/metrics/validation_metrics.json
+      - src/stages/evaluate.py
+      - src/core/models.py
+    outs:
+      - reports/metrics/model_comparison.csv:
+          cache: false
+      - reports/plots/test_performance.png:
+          cache: false
+    metrics:
+      - reports/metrics/classifier_metrics.json:
+          cache: false
+      - reports/metrics/regressor_metrics.json:
+          cache: false
+    plots:
+      - reports/plots/confusion_matrix.csv:
+          cache: false
+          template: confusion
+          x: actual
+          y: predicted
+      - reports/plots/pred_vs_actual:
+          cache: false
+          template: scatter
+          x: actual
+          y: predicted
+
+  explain:
+    cmd: python -m src.stages.explain
+    deps:
+      - data/processed/test.parquet
+      - models/best_overall_classifier.joblib
+      - models/best_respiratory.joblib
+      - models/best_cardio.joblib
+      - models/best_vector.joblib
+      - models/best_waterborne.joblib
+      - models/best_heat.joblib
+      - models/preprocess.json
+      - reports/metrics/validation_metrics.json
+      - src/stages/explain.py
+    params:
+      - seed
+      - explain
+    outs:
+      - reports/shap
+
+  drift:
+    cmd: python -m src.stages.drift
+    deps:
+      - data/processed/train.parquet
+      - data/processed/val.parquet
+      - data/processed/test.parquet
+      - models/best_overall_classifier.joblib
+      - models/best_respiratory.joblib
+      - models/best_vector.joblib
+      - models/best_waterborne.joblib
+      - models/best_heat.joblib
+      - models/preprocess.json
+      - reports/shap
+      - src/stages/drift.py
+    params:
+      - drift
+    outs:
+      - reports/drift/feature_drift.csv:
+          cache: false
+      - reports/drift/drift.png:
+          cache: false
+    metrics:
+      - reports/drift/drift_report.json:
+          cache: false
+    plots:
+      - reports/plots/drift_quarterly.csv:
+          cache: false
+          template: linear
+          x: quarter
+          y: change
+
+  assets:
+    cmd: python -m src.stages.assets
+    deps:
+      - data/raw/global_climate_health_impact_tracker_2015_2025.csv
+      - data/interim/clean.parquet
+      - data/processed/features.parquet
+      - data/processed/feature_rankings.csv
+      - models/best_overall_classifier.joblib
+      - models/best_respiratory.joblib
+      - models/best_cardio.joblib
+      - models/best_vector.joblib
+      - models/best_waterborne.joblib
+      - models/best_heat.joblib
+      - reports/metrics/feature_selection.json
+      - reports/metrics/validation_metrics.json
+      - reports/metrics/model_comparison.csv
+      - reports/shap
+      - src/stages/assets.py
+      - dashboard/inference.py
+      - dashboard/scoring.py
+      - dashboard/shap_utils.py
+    params:
+      - seed
+      - split
+      - assets
+    outs:
+      - artifacts

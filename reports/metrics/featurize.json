@@ -1,0 +1,13 @@
+{
+  "rows": 14050,
+  "n_predictors": 163,
+  "risk_class_edges": [
+    29.369471558034505,
+    37.35419196018828
+  ],
+  "risk_class_counts": {
+    "High": 4725,
+    "Medium": 4676,
+    "Low": 4649
+  }
+}

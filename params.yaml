@@ -81,7 +81,7 @@ train:
   xgb: {n_estimators: 300, max_depth: 6, learning_rate: 0.1}
 
 explain:
-  sample_size: 300   # test rows explained per model (TreeExplainer on RF is slow)
+  sample_size: 200   # test rows explained per model (TreeExplainer on RF is the slowest step)
   top_k: 15          # features shown in the plots
 
 drift:

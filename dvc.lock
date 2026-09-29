@@ -1,0 +1,576 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python -m src.stages.prepare
+    deps:
+    - path: data/raw/global_climate_health_impact_tracker_2015_2025.csv
+      hash: md5
+      md5: ed50c623def57c57fa5f719a302254d9
+      size: 2213853
+    - path: src/core/cleaning.py
+      hash: md5
+      md5: ba443f7cf2ecb1a3b11ec72aaa470a72
+      size: 4111
+    - path: src/stages/prepare.py
+      hash: md5
+      md5: 1cb26388dacb70d8ff67f9c22152a5d0
+      size: 1694
+    params:
+      params.yaml:
+        prepare:
+          non_negative_cols:
+          - air_quality_index
+          - pm25_ugm3
+          - respiratory_disease_rate
+          - cardio_mortality_rate
+          - vector_disease_risk_score
+          - waterborne_disease_incidents
+          - heat_related_admissions
+          - heat_wave_days
+          - extreme_weather_events
+          - precipitation_mm
+          binary_cols:
+          - drought_indicator
+          - flood_indicator
+          index_0_100_cols:
+          - healthcare_access_index
+          - mental_health_index
+          - food_security_index
+          dedup_keys:
+          - country_code
+          - year
+          - week
+    outs:
+    - path: data/interim/clean.parquet
+      hash: md5
+      md5: 091b30ea1af2487076a469373f9948fe
+      size: 421251
+    - path: reports/metrics/data_quality.json
+      hash: md5
+      md5: 63e0d3f51702cfa5084a1e0517172352
+      size: 893
+  featurize:
+    cmd: python -m src.stages.featurize
+    deps:
+    - path: data/interim/clean.parquet
+      hash: md5
+      md5: 091b30ea1af2487076a469373f9948fe
+      size: 421251
+    - path: src/core/features.py
+      hash: md5
+      md5: 320fe6e2c1b605ab0dff7836190ceb51
+      size: 4698
+    - path: src/stages/featurize.py
+      hash: md5
+      md5: 6fa16a4ddc0a1962372b90e0b00564c1
+      size: 1008
+    params:
+      params.yaml:
+        featurize:
+          roll_cols:
+          - temperature_celsius
+          - pm25_ugm3
+          - air_quality_index
+          - precipitation_mm
+          - heat_wave_days
+          - extreme_weather_events
+          - waterborne_disease_incidents
+          lag_cols:
+          - temperature_celsius
+          - pm25_ugm3
+          - air_quality_index
+          - precipitation_mm
+          - heat_wave_days
+          - extreme_weather_events
+          - waterborne_disease_incidents
+          - heat_related_admissions
+          rolling_windows:
+          - 4
+          - 8
+          - 12
+          lags:
+          - 1
+          - 2
+          - 4
+          - 8
+          interactions:
+          - - temperature_celsius
+            - pm25_ugm3
+            - temp_x_pm25
+          - - precipitation_mm
+            - temperature_celsius
+            - rain_x_temp
+          - - pm25_ugm3
+            - air_quality_index
+            - pm25_x_aqi
+          categorical:
+          - country_code
+          - region
+          - income_level
+          - climate_zone
+        label:
+          train_end_year: 2023
+          composite_cols:
+          - heat_related_admissions
+          - respiratory_disease_rate
+          - cardio_mortality_rate
+          - vector_disease_risk_score
+          - waterborne_disease_incidents
+          - pm25_ugm3
+          - temperature_celsius
+    outs:
+    - path: data/processed/features.parquet
+      hash: md5
+      md5: 9afd9709876e878bab0356a2fd050652
+      size: 3517426
+    - path: reports/metrics/featurize.json
+      hash: md5
+      md5: bb53d569feb03b2410d5f0349e435db7
+      size: 202
+  select_features:
+    cmd: python -m src.stages.select_features
+    deps:
+    - path: data/processed/features.parquet
+      hash: md5
+      md5: 9afd9709876e878bab0356a2fd050652
+      size: 3517426
+    - path: src/core/selection.py
+      hash: md5
+      md5: e72302ea1a60852a2cc286720d93bb30
+      size: 4348
+    - path: src/stages/select_features.py
+      hash: md5
+      md5: 6f48e0aec9d705360b582a104ac969ee
+      size: 1302
+    params:
+      params.yaml:
+        seed: 42
+        select:
+          target: health_impact_score
+          corr_threshold: 0.95
+          min_votes: 2
+          top_k: 60
+          mi_sample: 4000
+          rf_trees: 200
+    outs:
+    - path: data/processed/feature_rankings.csv
+      hash: md5
+      md5: 51e83de57137ac564614314c77b75d98
+      size: 12297
+    - path: data/processed/selected_features.json
+      hash: md5
+      md5: 11325ef9f8f822a7a9628268d3961f2b
+      size: 3340
+    - path: reports/metrics/feature_selection.json
+      hash: md5
+      md5: 2be5448d55ae8fc0b7b6a9b30b02dd4a
+      size: 1488
+  split:
+    cmd: python -m src.stages.split
+    deps:
+    - path: data/processed/features.parquet
+      hash: md5
+      md5: 9afd9709876e878bab0356a2fd050652
+      size: 3517426
+    - path: data/processed/selected_features.json
+      hash: md5
+      md5: 11325ef9f8f822a7a9628268d3961f2b
+      size: 3340
+    - path: src/stages/split.py
+      hash: md5
+      md5: 570644318423dd2a7ed892d5512b47a3
+      size: 1732
+    params:
+      params.yaml:
+        split:
+          train_end: '2022-12-31'
+          val_end: '2023-12-31'
+    outs:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: c24851a05dd046664a714ae09c321e80
+      size: 395862
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 68227d0fe4d29046780f2daf0603bd42
+      size: 1300481
+    - path: data/processed/val.parquet
+      hash: md5
+      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      size: 254308
+    - path: reports/metrics/split_summary.json
+      hash: md5
+      md5: 0d504cc6be0b59fedda227bbc14b8b14
+      size: 262
+  train:
+    cmd: python -m src.stages.train
+    deps:
+    - path: data/processed/selected_features.json
+      hash: md5
+      md5: 11325ef9f8f822a7a9628268d3961f2b
+      size: 3340
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 68227d0fe4d29046780f2daf0603bd42
+      size: 1300481
+    - path: data/processed/val.parquet
+      hash: md5
+      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      size: 254308
+    - path: src/core/models.py
+      hash: md5
+      md5: 422d8c158f32fe4c40a2e450a3a39319
+      size: 5039
+    - path: src/stages/train.py
+      hash: md5
+      md5: 848525413be1f693d83c76e8eabe3dfe
+      size: 2915
+    params:
+      params.yaml:
+        seed: 42
+        split.train_end: '2022-12-31'
+        train:
+          n_jobs: -1
+          logreg:
+            C: 1.0
+            l1_ratio: 0.5
+            max_iter: 2000
+          elasticnet:
+            alpha: 0.5
+            l1_ratio: 0.5
+            max_iter: 5000
+          dt:
+            max_depth: 12
+            min_samples_leaf: 20
+          rf:
+            n_estimators: 200
+            min_samples_leaf: 5
+          xgb:
+            n_estimators: 300
+            max_depth: 6
+            learning_rate: 0.1
+    outs:
+    - path: models/best_cardio.joblib
+      hash: md5
+      md5: 8f6e8f3c73d9505ff4b0e4c504b1a43e
+      size: 2520
+    - path: models/best_heat.joblib
+      hash: md5
+      md5: fb003ff5e7c73431f2b7c42ddc38096f
+      size: 395993
+    - path: models/best_overall_classifier.joblib
+      hash: md5
+      md5: f4dc81435041615d11333a44f1261814
+      size: 3510
+    - path: models/best_respiratory.joblib
+      hash: md5
+      md5: 66da555cfa0a4fd3740b8958e47ff078
+      size: 9769007
+    - path: models/best_vector.joblib
+      hash: md5
+      md5: 0c6d7dc911cb080daf202be125ffcab7
+      size: 9701368
+    - path: models/best_waterborne.joblib
+      hash: md5
+      md5: 0cd0db1a8b356d75f1df75cddf279cd2
+      size: 9668958
+    - path: models/candidates
+      hash: md5
+      md5: 82e097c5648e9c0bf69dad212fb4dd17.dir
+      size: 54213322
+      nfiles: 24
+    - path: models/preprocess.json
+      hash: md5
+      md5: ca24364885d778253892644d0a164c1f
+      size: 3712
+    - path: reports/metrics/validation_metrics.json
+      hash: md5
+      md5: 5beadd58179ea08bbd61b82d72f1d905
+      size: 3807
+  evaluate:
+    cmd: python -m src.stages.evaluate
+    deps:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: c24851a05dd046664a714ae09c321e80
+      size: 395862
+    - path: data/processed/val.parquet
+      hash: md5
+      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      size: 254308
+    - path: models/candidates
+      hash: md5
+      md5: 82e097c5648e9c0bf69dad212fb4dd17.dir
+      size: 54213322
+      nfiles: 24
+    - path: models/preprocess.json
+      hash: md5
+      md5: ca24364885d778253892644d0a164c1f
+      size: 3712
+    - path: reports/metrics/validation_metrics.json
+      hash: md5
+      md5: 5beadd58179ea08bbd61b82d72f1d905
+      size: 3807
+    - path: src/core/models.py
+      hash: md5
+      md5: 422d8c158f32fe4c40a2e450a3a39319
+      size: 5039
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: eaa6168d868f575d43ef8c9c8173ddcf
+      size: 3979
+    outs:
+    - path: reports/metrics/classifier_metrics.json
+      hash: md5
+      md5: 4b17950ea9a43254f04e63cd09120438
+      size: 585
+    - path: reports/metrics/model_comparison.csv
+      hash: md5
+      md5: 09eba79b9b7a84aa32c8f1e2a166367d
+      size: 5187
+    - path: reports/metrics/regressor_metrics.json
+      hash: md5
+      md5: 2b6cc223728327e5ac4a0cc5c1f2d109
+      size: 3068
+    - path: reports/plots/confusion_matrix.csv
+      hash: md5
+      md5: bb71d74a564f41eaacd49efd0a7ca987
+      size: 25133
+    - path: reports/plots/pred_vs_actual
+      hash: md5
+      md5: 809d823efa933bbc80f8550b5c30cd46.dir
+      size: 145215
+      nfiles: 5
+    - path: reports/plots/test_performance.png
+      hash: md5
+      md5: d3639a206ea0e04853ed2e324e90913d
+      size: 257240
+  explain:
+    cmd: python -m src.stages.explain
+    deps:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: c24851a05dd046664a714ae09c321e80
+      size: 395862
+    - path: models/best_cardio.joblib
+      hash: md5
+      md5: 8f6e8f3c73d9505ff4b0e4c504b1a43e
+      size: 2520
+    - path: models/best_heat.joblib
+      hash: md5
+      md5: fb003ff5e7c73431f2b7c42ddc38096f
+      size: 395993
+    - path: models/best_overall_classifier.joblib
+      hash: md5
+      md5: f4dc81435041615d11333a44f1261814
+      size: 3510
+    - path: models/best_respiratory.joblib
+      hash: md5
+      md5: 66da555cfa0a4fd3740b8958e47ff078
+      size: 9769007
+    - path: models/best_vector.joblib
+      hash: md5
+      md5: 0c6d7dc911cb080daf202be125ffcab7
+      size: 9701368
+    - path: models/best_waterborne.joblib
+      hash: md5
+      md5: 0cd0db1a8b356d75f1df75cddf279cd2
+      size: 9668958
+    - path: models/preprocess.json
+      hash: md5
+      md5: ca24364885d778253892644d0a164c1f
+      size: 3712
+    - path: reports/metrics/validation_metrics.json
+      hash: md5
+      md5: 5beadd58179ea08bbd61b82d72f1d905
+      size: 3807
+    - path: src/stages/explain.py
+      hash: md5
+      md5: b4ae033f88265c5fc08dd463b11f1e17
+      size: 4183
+    params:
+      params.yaml:
+        explain:
+          sample_size: 200
+          top_k: 15
+        seed: 42
+    outs:
+    - path: reports/shap
+      hash: md5
+      md5: 3f26e73a4e55012a1d6099ead5324df9.dir
+      size: 950688
+      nfiles: 13
+  drift:
+    cmd: python -m src.stages.drift
+    deps:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: c24851a05dd046664a714ae09c321e80
+      size: 395862
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 68227d0fe4d29046780f2daf0603bd42
+      size: 1300481
+    - path: data/processed/val.parquet
+      hash: md5
+      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      size: 254308
+    - path: models/best_heat.joblib
+      hash: md5
+      md5: fb003ff5e7c73431f2b7c42ddc38096f
+      size: 395993
+    - path: models/best_overall_classifier.joblib
+      hash: md5
+      md5: f4dc81435041615d11333a44f1261814
+      size: 3510
+    - path: models/best_respiratory.joblib
+      hash: md5
+      md5: 66da555cfa0a4fd3740b8958e47ff078
+      size: 9769007
+    - path: models/best_vector.joblib
+      hash: md5
+      md5: 0c6d7dc911cb080daf202be125ffcab7
+      size: 9701368
+    - path: models/best_waterborne.joblib
+      hash: md5
+      md5: 0cd0db1a8b356d75f1df75cddf279cd2
+      size: 9668958
+    - path: models/preprocess.json
+      hash: md5
+      md5: ca24364885d778253892644d0a164c1f
+      size: 3712
+    - path: reports/shap
+      hash: md5
+      md5: 3f26e73a4e55012a1d6099ead5324df9.dir
+      size: 950688
+      nfiles: 13
+    - path: src/stages/drift.py
+      hash: md5
+      md5: 513256e0f819c5b2c758636a0c345f7d
+      size: 8782
+    params:
+      params.yaml:
+        drift:
+          psi_threshold: 0.2
+          ks_pvalue: 0.05
+          psi_bins: 10
+          top_n_features: 15
+          max_drifted_share: 0.3
+          f1_tolerance: 0.05
+          rmse_tolerance: 0.2
+          max_flagged_share: 0.25
+          concept_tasks:
+          - overall_classifier
+          - respiratory
+          - vector
+          - heat
+          - waterborne
+    outs:
+    - path: reports/drift/drift.png
+      hash: md5
+      md5: 55b5239fd3700085bf2e5e84b292196f
+      size: 119518
+    - path: reports/drift/drift_report.json
+      hash: md5
+      md5: 549b1f3d52b144293fb12c4327b755f5
+      size: 1522
+    - path: reports/drift/feature_drift.csv
+      hash: md5
+      md5: 19f2f22d5422add555ece1bc3bb9a639
+      size: 3746
+    - path: reports/plots/drift_quarterly.csv
+      hash: md5
+      md5: e772581905b0a44d4f46614e146d8be1
+      size: 3551
+  assets:
+    cmd: python -m src.stages.assets
+    deps:
+    - path: dashboard/inference.py
+      hash: md5
+      md5: eaf0a6fb58535de829b13a210b835fa8
+      size: 7969
+    - path: dashboard/scoring.py
+      hash: md5
+      md5: b10ec8d76ba107c5654cc5917fb7d67f
+      size: 3435
+    - path: dashboard/shap_utils.py
+      hash: md5
+      md5: f1d5621a75757edc6cb02a3bfd077952
+      size: 5138
+    - path: data/interim/clean.parquet
+      hash: md5
+      md5: 091b30ea1af2487076a469373f9948fe
+      size: 421251
+    - path: data/processed/feature_rankings.csv
+      hash: md5
+      md5: 51e83de57137ac564614314c77b75d98
+      size: 12297
+    - path: data/processed/features.parquet
+      hash: md5
+      md5: 9afd9709876e878bab0356a2fd050652
+      size: 3517426
+    - path: data/raw/global_climate_health_impact_tracker_2015_2025.csv
+      hash: md5
+      md5: ed50c623def57c57fa5f719a302254d9
+      size: 2213853
+    - path: models/best_cardio.joblib
+      hash: md5
+      md5: 8f6e8f3c73d9505ff4b0e4c504b1a43e
+      size: 2520
+    - path: models/best_heat.joblib
+      hash: md5
+      md5: fb003ff5e7c73431f2b7c42ddc38096f
+      size: 395993
+    - path: models/best_overall_classifier.joblib
+      hash: md5
+      md5: f4dc81435041615d11333a44f1261814
+      size: 3510
+    - path: models/best_respiratory.joblib
+      hash: md5
+      md5: 66da555cfa0a4fd3740b8958e47ff078
+      size: 9769007
+    - path: models/best_vector.joblib
+      hash: md5
+      md5: 0c6d7dc911cb080daf202be125ffcab7
+      size: 9701368
+    - path: models/best_waterborne.joblib
+      hash: md5
+      md5: 0cd0db1a8b356d75f1df75cddf279cd2
+      size: 9668958
+    - path: reports/metrics/feature_selection.json
+      hash: md5
+      md5: 2be5448d55ae8fc0b7b6a9b30b02dd4a
+      size: 1488
+    - path: reports/metrics/model_comparison.csv
+      hash: md5
+      md5: 09eba79b9b7a84aa32c8f1e2a166367d
+      size: 5187
+    - path: reports/metrics/validation_metrics.json
+      hash: md5
+      md5: 5beadd58179ea08bbd61b82d72f1d905
+      size: 3807
+    - path: reports/shap
+      hash: md5
+      md5: 3f26e73a4e55012a1d6099ead5324df9.dir
+      size: 950688
+      nfiles: 13
+    - path: src/stages/assets.py
+      hash: md5
+      md5: 86466f3db77741346bd449d2e6dda696
+      size: 14232
+    params:
+      params.yaml:
+        assets:
+          shap_sample: 300
+          scatter_sample: 700
+          eda_sample: 1500
+        seed: 42
+        split:
+          train_end: '2022-12-31'
+          val_end: '2023-12-31'
+    outs:
+    - path: artifacts
+      hash: md5
+      md5: 9bd28e57ab11ad4637d2aa49030b0949.dir
+      size: 187047
+      nfiles: 11
