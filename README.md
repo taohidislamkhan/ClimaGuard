@@ -1,8 +1,5 @@
 # ClimaGuard — Regional Environmental Disease-Risk Nowcast
 
-**Team Phoenix Force:** Sayma Talukder Rupa · Md. Taohid Islam Khan Tazim · Farhan Tariq Jamee
-**Course:** DS-4491 Machine Learning Systems Design (also presented in Data Analytics Laboratory), United International University, Summer 2026
-
 ClimaGuard estimates weekly **regional** disease risk from climate, air-quality and
 socioeconomic data for 25 countries (2015–2025). One classifier predicts an overall
 Low / Medium / High risk class, and five regressors predict respiratory, vector-borne,
@@ -49,6 +46,9 @@ country-week of environmental data, estimate how elevated each disease indicator
 - The temperature column is on the dataset's own scale, not real °C.
 - The data is country-level and weekly, so there is nothing below national level or finer than a week.
 
+More detail: [`data_card.md`](data_card.md) (columns, provenance, cleaning) and
+[`eda_summary.md`](eda_summary.md) (distributions, correlations, seasonality).
+
 ## 2. ML model
 
 | Task | Target | Candidates (4 per task) | Selection |
@@ -84,7 +84,8 @@ ClimaGuard/
 ├── data/
 │   ├── raw/…csv.dvc            # pointer to the raw CSV (the CSV itself is in DVC)
 │   ├── interim/clean.parquet   # prepare output
-│   └── processed/              # features, selected feature list, train/val/test
+│   ├── processed/              # features, selected feature list, train/val/test
+│   └── cache/                  # dashboard: Dhaka climatology (Git) + SQLite history (ignored)
 ├── src/
 │   ├── core/                   # pure logic: cleaning, features, selection, models, advisory rules
 │   ├── stages/                 # one script per DVC stage (python -m src.stages.<name>)
@@ -96,12 +97,16 @@ ClimaGuard/
 │   ├── shap/                   # global SHAP per model (JSON + PNG)
 │   └── drift/                  # drift_report.json, per-feature PSI/KS, drift.png
 ├── artifacts/                  # precomputed dashboard JSON (assets stage)
-├── dashboard/ templates/ static/ app.py   # Flask dashboard (reads only pipeline outputs)
-├── tests/                      # pytest: API, scoring, pipeline outputs
+├── app.py                      # Flask entry point (pages + JSON API)
+├── dashboard/                  # inference, scoring, SHAP, advisories, Open-Meteo client, SQLite
+├── templates/ static/          # Jinja pages, CSS/JS, GeoJSON maps
+├── tests/                      # pytest: API, scoring, pipeline outputs (55 tests)
+├── docs/screenshots/           # dashboard screenshots
 ├── params.yaml                 # every tunable value
 ├── dvc.yaml / dvc.lock         # pipeline definition / exact hashes of the last run
-├── VIVA_NOTES.md               # viva Q&A + live demo script
-└── requirements.txt
+├── data_card.md / eda_summary.md   # dataset documentation and EDA findings
+├── Dockerfile                  # dashboard container
+└── requirements.txt            # pinned versions
 ```
 
 ## 4. DVC pipeline
@@ -173,6 +178,19 @@ flowchart TD
 | `advisory` | quantile thresholds for the advisory rules | dashboard |
 | `assets` | sample sizes for the dashboard charts | assets |
 
+**Git vs DVC.** Git holds what is small and text; DVC holds what is large or binary,
+and the hashes in `dvc.lock` / `*.dvc` link each commit to its exact data and models.
+
+| | Git (GitHub) | DVC (cache + DagsHub remote) |
+|---|---|---|
+| Tracks | code, `dvc.yaml`, `dvc.lock`, `params.yaml`, `*.dvc` pointers, `reports/metrics/`, `reports/plots/`, docs | raw CSV, parquet files, `models/**/*.joblib`, `reports/shap/`, `artifacts/` |
+| Remote | https://github.com/taohidislamkhan/ClimaGuard | https://dagshub.com/taohidislamkhan/ClimaGuard.dvc (remote `origin`, the default) |
+
+Reproducibility comes from fixed seeds (`params.yaml → seed`), pinned package
+versions, Parquet between stages (exact floats) and single-threaded prediction
+(a parallel Random Forest sums its trees in thread order), so
+`dvc repro -f` gives bit-for-bit identical outputs.
+
 ## 5. How to run
 
 ```bash
@@ -195,18 +213,45 @@ python -m pytest -q
 
 Without remote access, place the raw CSV at `data/raw/` and run `dvc repro`. The full run takes about 7 minutes on a 4-core laptop. `train` (~4 min) and `explain` (~2 min) are the slow stages.
 
-**Change a parameter and rerun:**
-```bash
-# e.g. params.yaml → train.rf.n_estimators: 100
-dvc status          # lists the stages whose params/deps changed
-dvc repro           # reruns train → evaluate, explain, drift, assets; skips the data stages
-dvc params diff
-dvc metrics diff    # compare with the last commit
-dvc plots show      # confusion matrix, predicted vs actual, drift (dvc_plots/index.html)
-```
-After a change that should be kept, commit `params.yaml`, `dvc.lock` and `reports/metrics/`, run `dvc push`, then update the tables below with `python -m src.utils.readme_tables`.
+**Tests.** `python -m pytest -q` runs 55 offline tests (Open-Meteo is faked): the API, the
+scoring rules, the pipeline outputs, and a check that the results tables below match
+`reports/metrics/`. `test_inference_latency` has a tight time budget and can be flaky on a busy machine.
 
-## 6. Results
+**Docker** (dashboard only; run `dvc pull` first so the model outputs are in the build context):
+```bash
+docker build -t climaguard .
+docker run --rm -p 5000:5000 climaguard     # http://localhost:5000
+```
+
+## 6. DVC workflow
+
+| Command | What it shows |
+|---|---|
+| `dvc dag` | the 9-stage graph above |
+| `dvc status` | `Data and pipelines are up to date.` when every hash in `dvc.lock` matches the workspace |
+| `dvc repro` | reruns only stages whose deps, params or code changed; otherwise "didn't change, skipping" |
+| `dvc metrics show reports/metrics/classifier_metrics.json` | test metrics (show one file at a time; all 8 together is a very wide table) |
+| `dvc plots show` | confusion matrix, predicted vs actual per disease, quarterly drift → `dvc_plots/index.html` |
+| `dvc push` / `dvc pull` | upload / download the cached data and models to / from DagsHub |
+
+**Change a parameter → partial rerun:**
+```bash
+# params.yaml: train.rf.n_estimators: 200 -> 100
+dvc status          # train: changed params: train.rf.n_estimators
+dvc repro           # prepare … split skipped; train, evaluate, explain, drift, assets rerun (~5 min)
+dvc params diff     # train.rf.n_estimators 200 -> 100
+dvc metrics diff    # rf.* moves (accuracy 0.8094 -> 0.8119); the selected models do not
+# go back WITHOUT retraining: the old outputs are still in the DVC cache
+git checkout HEAD -- params.yaml dvc.lock reports data/processed models/preprocess.json
+dvc checkout
+dvc status          # Data and pipelines are up to date.
+```
+Use `git checkout HEAD --` (not `git checkout --`): DVC's `autostage` has already staged the new `dvc.lock`.
+
+To keep a change instead: commit `params.yaml`, `dvc.lock` and `reports/`, run `dvc push`,
+then refresh the tables below with `python -m src.utils.readme_tables`.
+
+## 7. Results
 
 The tables below are generated from `reports/metrics/*.json` by
 `python -m src.utils.readme_tables`, and a test fails if they drift out of sync.
@@ -265,9 +310,15 @@ The tables below are generated from `reports/metrics/*.json` by
 - *Data drift:* PSI + KS test on every model feature.
 - *Concept drift:* each test quarter against the same quarter of 2023.
 
-If drift is significant, `drift_report.json` sets `retrain_recommended: true`. The response is to move `split.train_end` / `split.val_end` forward and run `dvc repro`. Only GDP per capita drifted, which is a steady economic trend and not a top model feature. No quarter degraded beyond tolerance, so retraining is not needed. We still demonstrated the retrain path (§7 of VIVA_NOTES).
+If drift is significant, `drift_report.json` sets `retrain_recommended: true`. The response is to move `split.train_end` / `split.val_end` forward and run `dvc repro`. Only GDP per capita drifted, which is a steady economic trend and not a top model feature. No quarter degraded beyond tolerance, so retraining is not needed. The retrain path still works:
+```bash
+cat reports/drift/drift_report.json    # retrain_recommended, data_drift, concept_drift
+# params.yaml: split.train_end "2023-12-31", split.val_end "2024-06-30"
+dvc repro && dvc metrics diff           # split onward reruns on newer weeks
+```
+Revert it the same way as the parameter demo in §6.
 
-## 7. Limitations and future work
+## 8. Limitations and future work
 
 - **Waterborne leakage.** The rolling features of `waterborne_disease_incidents` include the current week, so the waterborne regressor partly sees its own target. Its R² (~0.63) is optimistic. We kept it so the original results stay reproducible. The fix is to shift those windows by one week.
 - **Label cut year.** The risk-class tertiles are cut on years ≤ 2023, which includes the validation year. It does not touch the test years.
@@ -281,9 +332,36 @@ If drift is significant, `drift_report.json` sets `retrain_recommended: true`. T
   - schedule the drift stage on new weekly data
   - add a CI job that runs `dvc repro --dry` and the tests
 
-## 8. Dashboard
+## 9. Dashboard
 
-`python app.py` → http://127.0.0.1:5000. The dashboard only reads pipeline outputs (`models/best_*.joblib`, `data/processed/features.parquet`, `artifacts/`, `reports/`). It never trains.
+`python app.py` → http://127.0.0.1:5000. The dashboard only reads pipeline outputs (`models/best_*.joblib`, `data/processed/features.parquet`, `artifacts/`, `reports/`). It never trains; which model won is read from `reports/metrics/validation_metrics.json`.
+
+On first start it loads the six models (~2–8 s) and caches Dhaka's 2015–2025
+climatology from Open-Meteo in `data/cache/dhaka_climatology.json`. A background
+thread then fetches live weather, runs the models and builds the SHAP explainers.
+Stale data is served immediately while a refresh runs (the interval comes from Settings).
+Profile and settings are stored in SQLite (`data/cache/risk_history.db`, git-ignored).
+
+| Page | Content |
+|---|---|
+| `/` Dashboard | overall score, 5 disease cards, SHAP bars, live environment, trend, advisories, mini map |
+| `/my-risk` | per disease: model score → profile adjustment → final score, local SHAP, test R² and reliability |
+| `/environment` | live tiles ("Used by model" / "Display only"), 7-day forecast, 72-h PM2.5/AQI, heat-wave watch |
+| `/risk-map` | Bangladesh divisions (live, marked Demo) or 25 countries on test weeks, with a detail drawer |
+| `/risk-history` | score history with risk bands, predicted vs actual on the test period, month × disease heatmap, CSV export |
+| `/my-health` | health profile with a live preview of each rule; never sent to the model |
+| `/how-it-works` | 12 sections from scope to limitations, incl. model health / drift; every number from `artifacts/*.json` |
+| `/settings` | units, theme, default location, refresh interval |
+
+Every page has a JSON API under `/api/` (e.g. `/api/dashboard?loc=Dhaka`,
+`/api/disease/<key>`, `/api/map`, `/api/history`, `/api/methodology`, `POST /api/recalculate`).
+
+**How the numbers are made:**
+- **Overall score** = `100 × (0.5·P(Medium) + P(High))` from the classifier; the badge is the argmax class.
+- **Disease score** = the regressor's prediction as a percentile of that target's training distribution (< 40 Low, 40–64 Moderate, ≥ 65 High).
+- **Profile adjustment** is rule-based, applied after the model and capped at ±10 per disease (e.g. asthma → respiratory +5, age ≥ 65 → heat and cardio +5).
+- **Advisories** come from `src/core/advisory.py`; a disease rule fires at its 80th training percentile (`params.yaml → advisory`). Cardio has no rule.
+- **Live feature row:** Open-Meteo weather is aggregated into weekly blocks and passed through the same `src/core/features.py` code as the `featurize` stage (a test checks they match). The dataset's temperature scale is matched by quantile mapping against Dhaka's real climatology. Country context and disease lags come from the last dataset week (2025-10-19).
 
 | Dashboard | My Risk |
 |---|---|
