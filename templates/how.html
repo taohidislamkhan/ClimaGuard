@@ -5,7 +5,7 @@
   ("features", "Feature engineering"), ("split", "Chronological split"), ("models", "Model comparison"),
   ("regressors", "Disease regressors"), ("shap", "Explainability"), ("health", "Model health / drift"),
   ("advisory", "Advisory engine"),
-  ("limitations", "Limitations"), ("team", "Team")] %}
+  ("limitations", "Limitations")] %}
 {% block content %}
 <div class="grid gap-4 mt-2" style="grid-template-columns: 196px minmax(0, 1fr);">
   <!-- sticky section nav -->
@@ -179,18 +179,6 @@
         <li><b>Waterborne leakage:</b> its rolling-window features include the current week's case count, so its R² is optimistic.</li>
         <li><b>Prototype only — not a clinical tool.</b> Do not use it for medical decisions.</li>
       </ul>
-    </section>
-
-    <!-- 13 -->
-    <section class="card p-5 doc-section" id="team">
-      <h2>13. Team</h2>
-      <div class="flex flex-wrap items-center gap-3 mt-3">
-        <div class="panel px-4 py-3"><div class="text-[11px] text-[var(--muted)]">Team</div><div class="font-semibold text-[var(--heading)]">Phoenix Force</div></div>
-        {% for m in ["Sayma Talukder Rupa", "Md. Taohid Islam Khan Tazim", "Farhan Tariq Jamee"] %}
-          <div class="panel px-4 py-3 flex items-center gap-2"><i data-lucide="user-round" class="w-4 h-4 text-[var(--primary)]"></i><span class="text-[var(--heading)] text-[13px]">{{ m }}</span></div>
-        {% endfor %}
-      </div>
-      <p class="mt-3">Courses: <b>Data Analytics Laboratory</b> and <b>DS-4491 Machine Learning Systems Design</b>, Summer 2026, United International University (UIU).</p>
     </section>
   </div>
 </div>

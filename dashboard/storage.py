@@ -19,7 +19,7 @@ DIVISION_NAMES = ["Dhaka", "Chattogram", "Rajshahi", "Khulna", "Sylhet",
 LEVELS = ["Low", "Moderate", "High"]
 
 DEFAULT_PROFILE = {
-    "name": "Sayma", "age": 22, "location": "Dhaka",
+    "name": "User", "age": 22, "location": "Dhaka",
     "height_cm": None, "weight_kg": None, "bmi": 21.4,
     "activity": "Moderate", "outdoor_exposure": "High", "smoking": False,
     "asthma": False, "cardiovascular_disease": False, "diabetes": False,
