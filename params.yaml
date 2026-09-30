@@ -62,11 +62,11 @@ label:
 
 select:
   target: health_impact_score
-  corr_threshold: 0.95   # drop a feature whose |r| with an already-kept feature is above this
+  corr_threshold: 0.95  # drop a feature whose |r| with an already-kept feature is above this
   min_votes: 2           # a feature must be in the top half of >= 2 of the 3 rankings
   top_k: 60              # cap on the committee size (by mean rank)
   mi_sample: 4000        # rows used for mutual information
-  rf_trees: 200          # trees in the importance forest
+  rf_trees: 100          # trees in the importance forest
 
 split:
   train_end: "2022-12-31"   # train = up to and including this date

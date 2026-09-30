@@ -151,15 +151,15 @@ stages:
           min_votes: 2
           top_k: 60
           mi_sample: 4000
-          rf_trees: 200
+          rf_trees: 100
     outs:
     - path: data/processed/feature_rankings.csv
       hash: md5
-      md5: 51e83de57137ac564614314c77b75d98
-      size: 12297
+      md5: 24814743568cded49804c093f179cb48
+      size: 12234
     - path: data/processed/selected_features.json
       hash: md5
-      md5: 11325ef9f8f822a7a9628268d3961f2b
+      md5: 5d251d93d919fd7eb5a6e1f1f01af047
       size: 3340
     - path: reports/metrics/feature_selection.json
       hash: md5
@@ -174,7 +174,7 @@ stages:
       size: 3517426
     - path: data/processed/selected_features.json
       hash: md5
-      md5: 11325ef9f8f822a7a9628268d3961f2b
+      md5: 5d251d93d919fd7eb5a6e1f1f01af047
       size: 3340
     - path: src/stages/split.py
       hash: md5
@@ -188,15 +188,15 @@ stages:
     outs:
     - path: data/processed/test.parquet
       hash: md5
-      md5: c24851a05dd046664a714ae09c321e80
+      md5: 19dc1a0a1f45fbe3914defa4f1519ea8
       size: 395862
     - path: data/processed/train.parquet
       hash: md5
-      md5: 68227d0fe4d29046780f2daf0603bd42
+      md5: f77c834c3fb48dfd0b822d271212116f
       size: 1300481
     - path: data/processed/val.parquet
       hash: md5
-      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      md5: 924335434e089653c754f5f09c742a73
       size: 254308
     - path: reports/metrics/split_summary.json
       hash: md5
@@ -207,15 +207,15 @@ stages:
     deps:
     - path: data/processed/selected_features.json
       hash: md5
-      md5: 11325ef9f8f822a7a9628268d3961f2b
+      md5: 5d251d93d919fd7eb5a6e1f1f01af047
       size: 3340
     - path: data/processed/train.parquet
       hash: md5
-      md5: 68227d0fe4d29046780f2daf0603bd42
+      md5: f77c834c3fb48dfd0b822d271212116f
       size: 1300481
     - path: data/processed/val.parquet
       hash: md5
-      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      md5: 924335434e089653c754f5f09c742a73
       size: 254308
     - path: src/core/models.py
       hash: md5
@@ -252,65 +252,65 @@ stages:
     outs:
     - path: models/best_cardio.joblib
       hash: md5
-      md5: 8f6e8f3c73d9505ff4b0e4c504b1a43e
-      size: 2520
+      md5: 51bf3fdc2d6a7353c13a51331c1c12c9
+      size: 2534
     - path: models/best_heat.joblib
       hash: md5
-      md5: fb003ff5e7c73431f2b7c42ddc38096f
-      size: 395993
+      md5: 03426af584b9654c6f3fc733aa7c4f34
+      size: 396087
     - path: models/best_overall_classifier.joblib
       hash: md5
-      md5: f4dc81435041615d11333a44f1261814
-      size: 3510
+      md5: 0b40fa48ac27e8b3bd62f0ab3e9ca56d
+      size: 3515
     - path: models/best_respiratory.joblib
       hash: md5
-      md5: 66da555cfa0a4fd3740b8958e47ff078
-      size: 9769007
+      md5: 83b3b9ecfdb6129172aa27de439f2ac5
+      size: 9768086
     - path: models/best_vector.joblib
       hash: md5
-      md5: 0c6d7dc911cb080daf202be125ffcab7
-      size: 9701368
+      md5: 957c6680f2abebf880dd2ce2356ea964
+      size: 9701734
     - path: models/best_waterborne.joblib
       hash: md5
-      md5: 0cd0db1a8b356d75f1df75cddf279cd2
-      size: 9668958
+      md5: 2a69cde7a3263f6fdc958d58bdfbfbd8
+      size: 9666965
     - path: models/candidates
       hash: md5
-      md5: 82e097c5648e9c0bf69dad212fb4dd17.dir
-      size: 54213322
+      md5: f6a2672b27b42a8f5132f2cf289fb722.dir
+      size: 54196045
       nfiles: 24
     - path: models/preprocess.json
       hash: md5
-      md5: ca24364885d778253892644d0a164c1f
+      md5: b81cfd8ad9ba7abcd5804413485b70c8
       size: 3712
     - path: reports/metrics/validation_metrics.json
       hash: md5
-      md5: 5beadd58179ea08bbd61b82d72f1d905
-      size: 3807
+      md5: 395239f11f0774025abe13e06956b56a
+      size: 3809
   evaluate:
     cmd: python -m src.stages.evaluate
     deps:
     - path: data/processed/test.parquet
       hash: md5
-      md5: c24851a05dd046664a714ae09c321e80
+      md5: 19dc1a0a1f45fbe3914defa4f1519ea8
       size: 395862
     - path: data/processed/val.parquet
       hash: md5
-      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      md5: 924335434e089653c754f5f09c742a73
       size: 254308
     - path: models/candidates
       hash: md5
-      md5: 82e097c5648e9c0bf69dad212fb4dd17.dir
-      size: 54213322
+      md5: f6a2672b27b42a8f5132f2cf289fb722.dir
+      size: 54196045
       nfiles: 24
     - path: models/preprocess.json
       hash: md5
-      md5: ca24364885d778253892644d0a164c1f
+      md5: b81cfd8ad9ba7abcd5804413485b70c8
       size: 3712
     - path: reports/metrics/validation_metrics.json
       hash: md5
-      md5: 5beadd58179ea08bbd61b82d72f1d905
-      size: 3807
+      md5: 395239f11f0774025abe13e06956b56a
+      size: 3809
     - path: src/core/models.py
       hash: md5
       md5: 422d8c158f32fe4c40a2e450a3a39319
@@ -326,68 +326,68 @@ stages:
     outs:
     - path: reports/metrics/classifier_metrics.json
       hash: md5
-      md5: 4b17950ea9a43254f04e63cd09120438
-      size: 585
+      md5: 578c1ccd022fc688f9a026132640f830
+      size: 587
     - path: reports/metrics/model_comparison.csv
       hash: md5
-      md5: 986b15ed61f38518b0f94a5e3de89158
+      md5: 4c9f0b9fcf0d4c00edd44af7ea3e8290
       size: 5186
     - path: reports/metrics/regressor_metrics.json
       hash: md5
-      md5: e29356dd41442ab1af46a31e5bf84691
-      size: 3066
+      md5: 3f5724e16a34d01d3ef7f3303b2a0b51
+      size: 3063
     - path: reports/plots/confusion_matrix.csv
       hash: md5
       md5: bb71d74a564f41eaacd49efd0a7ca987
       size: 25133
     - path: reports/plots/pred_vs_actual
       hash: md5
-      md5: 809d823efa933bbc80f8550b5c30cd46.dir
-      size: 145215
+      md5: 302ce4c59a3134585cb05426f78ee30f.dir
+      size: 145235
       nfiles: 5
     - path: reports/plots/test_performance.png
       hash: md5
-      md5: d3639a206ea0e04853ed2e324e90913d
-      size: 257240
+      md5: a603f591944fcedbc980d086e6ad2b0d
+      size: 257250
   explain:
     cmd: python -m src.stages.explain
     deps:
     - path: data/processed/test.parquet
       hash: md5
-      md5: c24851a05dd046664a714ae09c321e80
+      md5: 19dc1a0a1f45fbe3914defa4f1519ea8
       size: 395862
     - path: models/best_cardio.joblib
       hash: md5
-      md5: 8f6e8f3c73d9505ff4b0e4c504b1a43e
-      size: 2520
+      md5: 51bf3fdc2d6a7353c13a51331c1c12c9
+      size: 2534
     - path: models/best_heat.joblib
       hash: md5
-      md5: fb003ff5e7c73431f2b7c42ddc38096f
-      size: 395993
+      md5: 03426af584b9654c6f3fc733aa7c4f34
+      size: 396087
     - path: models/best_overall_classifier.joblib
       hash: md5
-      md5: f4dc81435041615d11333a44f1261814
-      size: 3510
+      md5: 0b40fa48ac27e8b3bd62f0ab3e9ca56d
+      size: 3515
     - path: models/best_respiratory.joblib
       hash: md5
-      md5: 66da555cfa0a4fd3740b8958e47ff078
-      size: 9769007
+      md5: 83b3b9ecfdb6129172aa27de439f2ac5
+      size: 9768086
     - path: models/best_vector.joblib
       hash: md5
-      md5: 0c6d7dc911cb080daf202be125ffcab7
-      size: 9701368
+      md5: 957c6680f2abebf880dd2ce2356ea964
+      size: 9701734
     - path: models/best_waterborne.joblib
       hash: md5
-      md5: 0cd0db1a8b356d75f1df75cddf279cd2
-      size: 9668958
+      md5: 2a69cde7a3263f6fdc958d58bdfbfbd8
+      size: 9666965
     - path: models/preprocess.json
       hash: md5
-      md5: ca24364885d778253892644d0a164c1f
+      md5: b81cfd8ad9ba7abcd5804413485b70c8
       size: 3712
     - path: reports/metrics/validation_metrics.json
       hash: md5
-      md5: 5beadd58179ea08bbd61b82d72f1d905
-      size: 3807
+      md5: 395239f11f0774025abe13e06956b56a
+      size: 3809
     - path: src/stages/explain.py
       hash: md5
       md5: b4ae033f88265c5fc08dd463b11f1e17
@@ -405,52 +405,52 @@ stages:
     outs:
     - path: reports/shap
       hash: md5
-      md5: 97935cbae63b6a01082905bb1b6aea95.dir
-      size: 950275
+      md5: 9f5dd1c0786352f4bb7216f78bd1f038.dir
+      size: 948511
       nfiles: 13
   drift:
     cmd: python -m src.stages.drift
     deps:
     - path: data/processed/test.parquet
       hash: md5
-      md5: c24851a05dd046664a714ae09c321e80
+      md5: 19dc1a0a1f45fbe3914defa4f1519ea8
       size: 395862
     - path: data/processed/train.parquet
       hash: md5
-      md5: 68227d0fe4d29046780f2daf0603bd42
+      md5: f77c834c3fb48dfd0b822d271212116f
       size: 1300481
     - path: data/processed/val.parquet
       hash: md5
-      md5: 9ff1eddba0f7b09cf5647fa1f3177526
+      md5: 924335434e089653c754f5f09c742a73
       size: 254308
     - path: models/best_heat.joblib
       hash: md5
-      md5: fb003ff5e7c73431f2b7c42ddc38096f
-      size: 395993
+      md5: 03426af584b9654c6f3fc733aa7c4f34
+      size: 396087
     - path: models/best_overall_classifier.joblib
       hash: md5
-      md5: f4dc81435041615d11333a44f1261814
-      size: 3510
+      md5: 0b40fa48ac27e8b3bd62f0ab3e9ca56d
+      size: 3515
     - path: models/best_respiratory.joblib
       hash: md5
-      md5: 66da555cfa0a4fd3740b8958e47ff078
-      size: 9769007
+      md5: 83b3b9ecfdb6129172aa27de439f2ac5
+      size: 9768086
     - path: models/best_vector.joblib
       hash: md5
-      md5: 0c6d7dc911cb080daf202be125ffcab7
-      size: 9701368
+      md5: 957c6680f2abebf880dd2ce2356ea964
+      size: 9701734
     - path: models/best_waterborne.joblib
       hash: md5
-      md5: 0cd0db1a8b356d75f1df75cddf279cd2
-      size: 9668958
+      md5: 2a69cde7a3263f6fdc958d58bdfbfbd8
+      size: 9666965
     - path: models/preprocess.json
       hash: md5
-      md5: ca24364885d778253892644d0a164c1f
+      md5: b81cfd8ad9ba7abcd5804413485b70c8
       size: 3712
     - path: reports/shap
       hash: md5
-      md5: 97935cbae63b6a01082905bb1b6aea95.dir
-      size: 950275
+      md5: 9f5dd1c0786352f4bb7216f78bd1f038.dir
+      size: 948511
       nfiles: 13
     - path: src/stages/drift.py
       hash: md5
@@ -480,15 +480,15 @@ stages:
     outs:
     - path: reports/drift/drift.png
       hash: md5
-      md5: 55b5239fd3700085bf2e5e84b292196f
-      size: 119518
+      md5: b9ff448b6ccb8fd67174a0c122bd4ad1
+      size: 119747
     - path: reports/drift/drift_report.json
       hash: md5
       md5: 549b1f3d52b144293fb12c4327b755f5
       size: 1522
     - path: reports/drift/feature_drift.csv
       hash: md5
-      md5: 19f2f22d5422add555ece1bc3bb9a639
+      md5: a45a0b814526e678d3908875d2bbbd1c
       size: 3746
     - path: reports/metrics/drift_metrics.json
       hash: md5
@@ -496,8 +496,8 @@ stages:
       size: 190
     - path: reports/plots/drift_quarterly.csv
       hash: md5
-      md5: bce5d38bfa3aaf48bbc785d254e021c1
-      size: 3545
+      md5: 9843c1b27e80a7b20e64c51f01097912
+      size: 3553
   assets:
     cmd: python -m src.stages.assets
     deps:
@@ -519,8 +519,8 @@ stages:
       size: 421251
     - path: data/processed/feature_rankings.csv
       hash: md5
-      md5: 51e83de57137ac564614314c77b75d98
-      size: 12297
+      md5: 24814743568cded49804c093f179cb48
+      size: 12234
     - path: data/processed/features.parquet
       hash: md5
       md5: 9afd9709876e878bab0356a2fd050652
@@ -531,44 +531,44 @@ stages:
       size: 2213853
     - path: models/best_cardio.joblib
       hash: md5
-      md5: 8f6e8f3c73d9505ff4b0e4c504b1a43e
-      size: 2520
+      md5: 51bf3fdc2d6a7353c13a51331c1c12c9
+      size: 2534
     - path: models/best_heat.joblib
       hash: md5
-      md5: fb003ff5e7c73431f2b7c42ddc38096f
-      size: 395993
+      md5: 03426af584b9654c6f3fc733aa7c4f34
+      size: 396087
     - path: models/best_overall_classifier.joblib
       hash: md5
-      md5: f4dc81435041615d11333a44f1261814
-      size: 3510
+      md5: 0b40fa48ac27e8b3bd62f0ab3e9ca56d
+      size: 3515
     - path: models/best_respiratory.joblib
       hash: md5
-      md5: 66da555cfa0a4fd3740b8958e47ff078
-      size: 9769007
+      md5: 83b3b9ecfdb6129172aa27de439f2ac5
+      size: 9768086
     - path: models/best_vector.joblib
       hash: md5
-      md5: 0c6d7dc911cb080daf202be125ffcab7
-      size: 9701368
+      md5: 957c6680f2abebf880dd2ce2356ea964
+      size: 9701734
     - path: models/best_waterborne.joblib
       hash: md5
-      md5: 0cd0db1a8b356d75f1df75cddf279cd2
-      size: 9668958
+      md5: 2a69cde7a3263f6fdc958d58bdfbfbd8
+      size: 9666965
     - path: reports/metrics/feature_selection.json
       hash: md5
       md5: 2be5448d55ae8fc0b7b6a9b30b02dd4a
       size: 1488
     - path: reports/metrics/model_comparison.csv
       hash: md5
-      md5: 986b15ed61f38518b0f94a5e3de89158
+      md5: 4c9f0b9fcf0d4c00edd44af7ea3e8290
       size: 5186
     - path: reports/metrics/validation_metrics.json
       hash: md5
-      md5: 5beadd58179ea08bbd61b82d72f1d905
-      size: 3807
+      md5: 395239f11f0774025abe13e06956b56a
+      size: 3809
     - path: reports/shap
       hash: md5
-      md5: 97935cbae63b6a01082905bb1b6aea95.dir
-      size: 950275
+      md5: 9f5dd1c0786352f4bb7216f78bd1f038.dir
+      size: 948511
       nfiles: 13
     - path: src/stages/assets.py
       hash: md5
@@ -587,6 +587,6 @@ stages:
     outs:
     - path: artifacts
       hash: md5
-      md5: 9bd28e57ab11ad4637d2aa49030b0949.dir
-      size: 187047
+      md5: 1a0c950257639904b145728e0d71ad01.dir
+      size: 186998
       nfiles: 11

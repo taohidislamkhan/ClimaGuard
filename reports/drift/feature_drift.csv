@@ -43,10 +43,10 @@ pm25_ugm3_lag1w,0.002019,0.019062,0.483489,65.930689,64.75634,False
 waterborne_disease_incidents_lag4w,0.00197,0.01471,0.796436,22.199699,22.224979,False
 pm25_ugm3,0.001832,0.017689,0.580233,65.902766,64.774638,False
 food_security_index,0.000913,0.015595,0.73376,93.293841,93.351021,False
-income_level_Lower-Middle,0.0,0.0,1.0,0.36,0.36,False
 climate_zone_temperate,0.0,0.0,1.0,0.4,0.4,False
-longitude,0.0,0.0,1.0,27.3496,27.3496,False
+income_level_Lower-Middle,0.0,0.0,1.0,0.36,0.36,False
 climate_zone_tropical,0.0,0.0,1.0,0.36,0.36,False
 latitude,0.0,0.0,1.0,18.9052,18.9052,False
+longitude,0.0,0.0,1.0,27.3496,27.3496,False
 region_Europe,0.0,0.0,1.0,0.2,0.2,False
 region_Southeast Asia,0.0,0.0,1.0,0.16,0.16,False
