@@ -4,7 +4,7 @@
   ("scope", "Problem & scope"), ("dataset", "Dataset"), ("cleaning", "Cleaning"), ("eda", "EDA"),
   ("features", "Feature engineering"), ("split", "Chronological split"), ("models", "Model comparison"),
   ("regressors", "Disease regressors"), ("shap", "Explainability"), ("health", "Model health / drift"),
-  ("advisory", "Advisory engine"),
+  ("advisory", "Advisory engine"), ("personal", "Personal Advisory Engine"),
   ("limitations", "Limitations")] %}
 {% block content %}
 <div class="grid gap-4 mt-2" style="grid-template-columns: 196px minmax(0, 1fr);">
@@ -167,8 +167,41 @@
     </section>
 
     <!-- 12 -->
+    <section class="card p-5 doc-section" id="personal">
+      <h2>12. Personal Advisory Engine</h2>
+      <div class="panel p-3 mt-2 flex gap-3 items-start" style="border-color:var(--primary)">
+        <i data-lucide="scale" class="w-5 h-5 text-[var(--primary)] shrink-0 mt-0.5"></i>
+        <div class="text-[13px] text-[var(--heading)]"><b>This layer is rule-based, not learned from data.</b>
+          The ML models stay regional: they predict risk for a division and never see the profile.
+          The rules below come from public-health guidance (WHO, US EPA AirNow, US CDC), not from the dataset.</div>
+      </div>
+      <p class="mt-3"><code>regional risk band (ML)</code> + <code>live conditions</code> + <code>personal sensitivity (rules)</code> → <b>personal advisory</b></p>
+      <ol class="list-decimal pl-5 mt-2 space-y-1 text-[13px]">
+        <li><b>Sensitivity:</b> each rule that matches the profile sets one disease to <i>elevated</i> or <i>high</i>; a disease takes the highest matching rule (otherwise <i>normal</i>).</li>
+        <li><b>Regional band:</b> the disease model's percentile score (&lt;40 Low, 40–64 Moderate, ≥65 High). Cardiovascular uses the live US EPA AQI category instead, because its model has no predictive skill.</li>
+        <li><b>Matrix:</b> personal level = matrix[regional band][sensitivity] (in <code>params.yaml → personal_advisory</code>).</li>
+        <li><b>Live floors:</b> <span id="pe-overrides">–</span></li>
+        <li><b>Output:</b> up to 5 items sorted by level, each with 2–3 actions, a "why" (top SHAP driver + live value + rule), a time window from the hourly forecast, and sources. Red-flag symptoms are shown whenever an item is High or above. No medication names or doses.</li>
+      </ol>
+      <div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);">
+        <div>
+          <div class="text-[12px] font-semibold text-[var(--heading)]">Decision matrix</div>
+          <table class="tbl mt-1"><thead><tr><th>Regional ↓ / Sensitivity →</th><th>normal</th><th>elevated</th><th>high</th></tr></thead>
+            <tbody id="pe-matrix"></tbody></table>
+        </div>
+        <div>
+          <div class="text-[12px] font-semibold text-[var(--heading)]">Sources</div>
+          <ul class="list-disc pl-5 mt-1 space-y-0.5 text-[12.5px]" id="pe-sources"></ul>
+        </div>
+      </div>
+      <div class="mt-4 text-[12px] font-semibold text-[var(--heading)]">Rule table (<span id="pe-count">–</span> rules, <code>dashboard/personal_rules.py</code>)</div>
+      <table class="tbl mt-1"><thead><tr><th>Disease</th><th>Profile condition</th><th>Sensitivity</th><th>Source</th></tr></thead>
+        <tbody id="pe-rules"></tbody></table>
+    </section>
+
+    <!-- 13 -->
     <section class="limitations p-5 doc-section" id="limitations">
-      <h2 class="flex items-center gap-2"><i data-lucide="triangle-alert" class="w-5 h-5 text-[var(--high)]"></i>12. Limitations</h2>
+      <h2 class="flex items-center gap-2"><i data-lucide="triangle-alert" class="w-5 h-5 text-[var(--high)]"></i>13. Limitations</h2>
       <ul class="list-disc pl-5 mt-2 space-y-1">
         <li><b>Missing variables:</b> no humidity, elevation, UV, wind or confirmed case counts in the training data.</li>
         <li><b>Country level:</b> trained on one weekly series per country; the Bangladesh division map only varies local weather.</li>
@@ -177,6 +210,7 @@
         <li><b>Frozen inputs:</b> past disease counts (autoregressive features) stop at the dataset's last week.</li>
         <li><b>Cardiovascular:</b> no predictive skill (test R² <span id="lim-cardio">≈ 0</span>).</li>
         <li><b>Waterborne leakage:</b> its rolling-window features include the current week's case count, so its R² is optimistic.</li>
+        <li><b>Personal advisory:</b> expert rules, not validated on outcome data; sensitivity levels and the matrix are design choices. Bangla text is a fixed translation and should be reviewed by a native speaker.</li>
         <li><b>Prototype only — not a clinical tool.</b> Do not use it for medical decisions.</li>
       </ul>
     </section>

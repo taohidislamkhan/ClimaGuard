@@ -237,14 +237,15 @@ def fetch_live(heatwave_tmax: float) -> dict[str, LiveLocation]:
 
 
 def fetch_forecast(name: str, heatwave_tmax: float) -> dict:
-    """7-day daily weather + next-72-hour air quality for one division."""
+    """7-day daily weather + next-72-hour air quality and temperature for one division."""
     lat, lon = DIVISIONS[name]
     common = {"latitude": lat, "longitude": lon, "timezone": "Asia/Dhaka"}
     with ThreadPoolExecutor(max_workers=2) as pool:
         fc, aq = pool.map(lambda a: _get_json(*a), [
             (FORECAST_URL, {**common, "forecast_days": 7,
                             "daily": "temperature_2m_max,temperature_2m_min,"
-                                     "precipitation_sum,precipitation_probability_max"}),
+                                     "precipitation_sum,precipitation_probability_max",
+                            "hourly": "temperature_2m,apparent_temperature"}),
             (AIR_URL, {**common, "forecast_days": 4, "hourly": "pm2_5,us_aqi"}),
         ])
     d = fc["daily"]
@@ -256,8 +257,15 @@ def fetch_forecast(name: str, heatwave_tmax: float) -> dict:
     h = pd.DataFrame(aq["hourly"])
     h["time"] = pd.to_datetime(h["time"])
     h = h[(h["time"] >= now) & (h["time"] < now + pd.Timedelta(hours=72))]
-    hours = [{"time": t.isoformat(), "pm25": None if pd.isna(p) else float(p),
-              "aqi": None if pd.isna(q) else float(q)}
-             for t, p, q in zip(h["time"], h["pm2_5"], h["us_aqi"])]
+    ht = pd.DataFrame(fc["hourly"])
+    ht["time"] = pd.to_datetime(ht["time"])
+    h = h.merge(ht, on="time", how="left")
+
+    def num(v):
+        return None if pd.isna(v) else float(v)
+
+    hours = [{"time": t.isoformat(), "pm25": num(p), "aqi": num(q), "temp": num(tc), "feels_like": num(fl)}
+             for t, p, q, tc, fl in zip(h["time"], h["pm2_5"], h["us_aqi"],
+                                        h["temperature_2m"], h["apparent_temperature"])]
     return {"days": days, "hours": hours, "heatwave_tmax": heatwave_tmax,
             "heatwave_days": sum(x["heatwave"] for x in days)}

@@ -2,64 +2,12 @@
 
 import time
 
-import numpy as np
-import pandas as pd
 import pytest
 
-from dashboard import service as service_mod
 from dashboard import weather_client
-from dashboard.history import History
-from dashboard.storage import AppStore
-from dashboard.weather_client import Climatology, DIVISIONS, LiveLocation
 
 TOP_KEYS = {"overall", "diseases", "shap_factors", "environment", "trend",
             "advisories", "changes", "map", "updated_at"}
-
-
-def _fake_climatology(store):
-    real = np.sort(np.random.default_rng(1).normal(26, 4, 564))
-    return Climatology(real, np.sort(store.country["temperature_celsius"].to_numpy()), 35.0)
-
-
-def _fake_live(store, clim):
-    """13 dataset weeks (temperature converted back to real °C) per division."""
-    hist = store.country_history(13)
-    weekly = hist[["temperature_celsius", "pm25_ugm3", "air_quality_index",
-                   "precipitation_mm", "heat_wave_days"]].copy()
-    weekly["temperature_celsius"] = weekly["temperature_celsius"].map(clim.to_real_temp)
-    cur = {"temperature": 31.0, "feels_like": 36.0, "humidity": 78, "wind_speed": 12, "rainfall": 12,
-           "uv_index": 6, "pm25": 78, "pm10": 120, "aqi": 142, "time": "2026-09-25T23:45"}
-    prev = {**cur, "temperature": 30.0, "pm25": 70, "aqi": 130}
-
-    def fetch(_threshold):
-        return {n: LiveLocation(n, *DIVISIONS[n], weekly.copy(), dict(cur), dict(prev))
-                for n in DIVISIONS}
-    return fetch
-
-
-def _fake_forecast(name, heatwave_tmax):
-    days = [{"date": f"2026-09-{27 + i:02d}", "tmax": 33.0 + i, "tmin": 26.0, "rain": 2.0,
-             "rain_prob": 40, "heatwave": 33.0 + i > heatwave_tmax} for i in range(7)]
-    hours = [{"time": f"2026-09-27T{h % 24:02d}:00:00", "pm25": 20.0 + h, "aqi": 60.0 + h}
-             for h in range(72)]
-    return {"days": days, "hours": hours, "heatwave_tmax": heatwave_tmax,
-            "heatwave_days": sum(d["heatwave"] for d in days)}
-
-
-@pytest.fixture()
-def svc(store, tmp_path, monkeypatch):
-    s = service_mod.DashboardService(history=History(tmp_path / "h.db"),
-                                     app_store=AppStore(tmp_path / "h.db"), store=store)
-    s._clim = _fake_climatology(store)
-    monkeypatch.setattr(weather_client, "fetch_live", _fake_live(store, s._clim))
-    monkeypatch.setattr(weather_client, "fetch_forecast", _fake_forecast)
-    return s
-
-
-@pytest.fixture()
-def client(svc):
-    from app import create_app
-    return create_app(svc).test_client()
 
 
 def test_dashboard_schema(client):
@@ -96,7 +44,7 @@ def test_backfill_then_demo_flag(client):
 
 def test_profile_adjusts_scores_not_model(client):
     base = client.get("/api/dashboard").get_json()
-    client.post("/api/profile", json={"asthma": True, "age": 70, "outdoor_exposure": "Low"})
+    client.post("/api/profile", json={"asthma": True, "age": 70, "outdoor_exposure": "Low", "consent": True})
     after = client.get("/api/dashboard").get_json()
     assert after["overall"] == base["overall"]                    # model output untouched
     resp = {x["key"]: x for x in after["diseases"]}
@@ -169,7 +117,7 @@ def test_methodology_bundle(client):
 
 
 def test_disease_deep_dive(client):
-    client.post("/api/profile", json={"asthma": True, "outdoor_exposure": "High", "smoking": True})
+    client.post("/api/profile", json={"asthma": True, "outdoor_exposure": "High", "smoking": True, "consent": True})
     d = client.get("/api/disease/respiratory?loc=Dhaka").get_json()
     assert d["adjustment"]["points"] == 10 and d["adjustment"]["capped"]
     assert d["score"] == min(100, d["model_score"] + 10)
@@ -262,7 +210,7 @@ def test_forecast_and_failure(client, monkeypatch):
 
 
 def test_profile_saved_in_sqlite_and_preview(client, svc):
-    p = client.post("/api/profile", json={"height_cm": 170, "weight_kg": 95, "diabetes": True}).get_json()
+    p = client.post("/api/profile", json={"height_cm": 170, "weight_kg": 95, "diabetes": True, "consent": True}).get_json()
     assert p["bmi"] == round(95 / 1.7 ** 2, 1) and p["bmi"] >= 30
     assert svc.app.profile()["diabetes"] is True             # persisted, not just in memory
     pv = client.post("/api/profile/preview", json={"age": 70, "diabetes": False}).get_json()

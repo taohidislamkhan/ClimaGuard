@@ -3,6 +3,11 @@
 Both live in the same database file as ``risk_history`` as one JSON
 document each (tables ``profile`` and ``settings``, row id 1). Unknown keys
 are dropped and values are validated before they are stored.
+
+Privacy: the profile stays in this local SQLite file. It is never logged and
+never sent to an external API (Open-Meteo only receives division
+coordinates). Saving a health condition requires ``consent``; deleting the
+profile removes the row (``secure_delete`` overwrites the freed pages).
 """
 
 from __future__ import annotations
@@ -23,7 +28,17 @@ DEFAULT_PROFILE = {
     "height_cm": None, "weight_kg": None, "bmi": 21.4,
     "activity": "Moderate", "outdoor_exposure": "High", "smoking": False,
     "asthma": False, "cardiovascular_disease": False, "diabetes": False,
+    # personal advisory fields (dashboard/personal_rules.py)
+    "pregnancy": False, "weakened_immunity": False,
+    "outdoor_work": False, "outdoor_hours": 2, "commute": "bus",
+    "has_cooling": True, "mosquito_nets": True, "water_source": "filtered",
+    "consent": False,
 }
+
+# Health conditions that need the consent box ticked before they are saved.
+CONDITIONS = ["asthma", "cardiovascular_disease", "diabetes", "pregnancy", "weakened_immunity"]
+COMMUTES = ["walk", "rickshaw", "bus", "car"]
+WATER_SOURCES = ["tap", "filtered", "boiled", "tube_well"]
 
 DEFAULT_SETTINGS = {
     "units": "C", "theme": "light", "default_location": "Dhaka",
@@ -68,8 +83,13 @@ def clean_profile(data: dict, base: dict | None = None) -> dict:
     for k in ("activity", "outdoor_exposure"):
         if p.get(k) not in LEVELS:
             raise ValidationError(f"{k} must be Low, Moderate or High")
-    for k in ("smoking", "asthma", "cardiovascular_disease", "diabetes"):
+    for k in ("smoking", *CONDITIONS, "outdoor_work", "has_cooling", "mosquito_nets", "consent"):
         p[k] = bool(p.get(k))
+    p["outdoor_hours"] = _num(p.get("outdoor_hours"), 0, 24, "Outdoor hours")
+    if p.get("commute") not in COMMUTES:
+        raise ValidationError(f"commute must be one of {COMMUTES}")
+    if p.get("water_source") not in WATER_SOURCES:
+        raise ValidationError(f"water_source must be one of {WATER_SOURCES}")
     p["height_cm"] = _num(p.get("height_cm"), 50, 250, "Height", allow_none=True)
     p["weight_kg"] = _num(p.get("weight_kg"), 10, 300, "Weight", allow_none=True)
     if p["height_cm"] and p["weight_kg"]:
@@ -108,6 +128,7 @@ class AppStore:
     def __init__(self, path: Path = DB_PATH) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(path, check_same_thread=False)
+        self.conn.execute("PRAGMA secure_delete = ON")     # deleted rows are overwritten on disk
         self._lock = threading.Lock()
         with self._lock:
             for table in ("profile", "settings"):
@@ -134,10 +155,21 @@ class AppStore:
     def profile(self) -> dict:
         return self._get("profile", DEFAULT_PROFILE, clean_profile)
 
+    def has_profile(self) -> bool:
+        with self._lock:
+            return self.conn.execute("SELECT 1 FROM profile WHERE id = 1").fetchone() is not None
+
     def save_profile(self, data: dict) -> dict:
         p = clean_profile(data, self.profile())
+        if not p["consent"] and any(p[k] for k in CONDITIONS):
+            raise ValidationError("Tick the consent box before saving a health condition")
         self._put("profile", p)
         return p
+
+    def delete_profile(self) -> None:
+        with self._lock:
+            self.conn.execute("DELETE FROM profile WHERE id = 1")
+            self.conn.commit()
 
     def settings(self) -> dict:
         return self._get("settings", DEFAULT_SETTINGS, clean_settings)

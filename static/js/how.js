@@ -233,6 +233,24 @@ function renderAdvisory(rows) {
     <td><ul class="list-disc pl-4">${r.actions.map((a) => `<li class="text-[12px]">${esc(a)}</li>`).join("")}</ul></td></tr>`).join("");
 }
 
+function renderPersonalEngine(pe) {
+  const lbl = { respiratory: "Respiratory", heat: "Heat-related", cardio: "Cardiovascular", vector: "Vector-borne", waterborne: "Waterborne" };
+  document.getElementById("pe-matrix").innerHTML = ["Low", "Moderate", "High"].map((band) => `
+    <tr><td class="font-semibold">${band}</td>${["normal", "elevated", "high"].map((s) => `<td>${badge(pe.matrix[band][s])}</td>`).join("")}</tr>`).join("");
+  const o = pe.overrides;
+  document.getElementById("pe-overrides").textContent =
+    `for a person with HIGH respiratory or cardio sensitivity, PM2.5 > ${o.pm25_ugm3} µg/m³ or AQI > ${o.aqi} → at least Moderate, ` +
+    `and PM2.5 > ${o.pm25_unhealthy} or AQI > ${o.aqi_unhealthy} → at least High (US EPA AirNow). For HIGH heat sensitivity, ` +
+    `today's forecast max ≥ ${pe.heat_threshold.toFixed(0)} °C (the pipeline's heat-wave threshold) → at least Moderate.`;
+  document.getElementById("pe-sources").innerHTML = pe.sources.map((x) =>
+    `<li><a class="text-[var(--primary)] underline" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join("");
+  document.getElementById("pe-count").textContent = pe.rules.length;
+  document.getElementById("pe-rules").innerHTML = pe.rules.map((r) => `
+    <tr><td class="font-semibold">${esc(lbl[r.disease])}</td><td>${esc(r.condition)}</td>
+      <td><span class="badge ${r.sensitivity === "high" ? "lvl-High" : "lvl-Moderate"}">${esc(r.sensitivity)}</span></td>
+      <td class="text-[12px]"><a href="${esc(r.url)}" target="_blank" rel="noopener" data-tip="${esc(r.url)}">${esc(r.source)}</a></td></tr>`).join("");
+}
+
 function setupNav() {
   const links = [...document.querySelectorAll("#section-nav a")];
   const obs = new IntersectionObserver((entries) => {
@@ -261,4 +279,5 @@ Page.run(() => api("/api/methodology"), (m) => {
   renderShap(m.shap);
   renderHealth(m.drift);
   renderAdvisory(m.advisory_table);
+  renderPersonalEngine(m.personal_engine);
 });

@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from . import advisory, scoring, shap_utils, weather_client
+from . import advisory, personal_rules, scoring, shap_utils, weather_client
 from .history import History
 from .inference import MODEL_NAMES, TARGETS, ModelStore, Prediction
 from .storage import DEFAULT_PROFILE, AppStore
@@ -63,6 +63,7 @@ class DashboardService:
         self._clim = None
         self._run: ModelRun | None = None
         self._lock = threading.Lock()
+        self._drivers: dict[tuple, str | None] = {}
 
     @property
     def profile(self) -> dict:
@@ -301,6 +302,53 @@ class DashboardService:
 
     def update_profile(self, data: dict) -> dict:
         return self.app.save_profile(data)
+
+    # -- personal advisory (rule-based; the profile never enters a model) ------
+    def _top_driver(self, run: ModelRun, loc: str, key: str) -> str | None:
+        """Friendly label of the feature group that raises this disease's prediction most."""
+        ck = (run.computed_at, loc, key)
+        if ck not in self._drivers:
+            rows = shap_utils.grouped_signed(self.store.models[key], run.rows[loc], k=8)
+            up = [r for r in rows if r["shap"] > 0]
+            self._drivers[ck] = up[0]["label"] if up else None
+        return self._drivers[ck]
+
+    def personal_advisory(self, location: str, profile: dict | None = None,
+                          lang: str = "en") -> dict:
+        """Personal advisory for ``profile`` (default: the saved one).
+
+        ``personalized`` is False when no profile is saved and none is given;
+        the dashboard then keeps the regional advisories."""
+        if location not in weather_client.DIVISIONS:
+            raise KeyError(location)
+        personalized = profile is not None or self.app.has_profile()
+        profile = profile if profile is not None else self.profile
+        run = self.model_run()
+        scores = self.model_scores(run.preds[location])
+        now_env = run.env_now[location]
+        regional = {k: {"band": scoring.band(scores[k]), "score": round(scores[k]),
+                        "driver": self._top_driver(run, location, k)}
+                    for k in ("respiratory", "vector", "heat", "waterborne")}
+        # The cardio model has no skill (R² ~ 0): its regional band is the live
+        # US EPA AQI category instead (PM2.5 is the EPA's cardiac pathway).
+        regional["cardio"] = {"band": aqi_category(now_env.get("aqi"))["level"] or scoring.LOW,
+                              "score": round(scores["cardio"]), "driver": None}
+        heat_thr = self.climatology().heatwave_tmax
+        forecast = None
+        if run.live:
+            try:
+                f = weather_client.fetch_forecast(location, heat_thr)
+                forecast = {"tmax_today": f["days"][0]["tmax"] if f["days"] else None,
+                            "hours": f["hours"]}
+            except Exception:       # forecast is optional: no "when" window, no heat override
+                forecast = None
+        live = {"pm25": now_env.get("pm25"), "aqi": now_env.get("aqi"),
+                "rain_week": run.env_week[location].get("rainfall")}
+        out = personal_rules.evaluate(profile, regional, live, forecast, heat_thr, lang,
+                                      now=datetime.now(TZ).replace(tzinfo=None))
+        return {"personalized": personalized, "location": location, "live": run.live,
+                "updated_at": run.computed_at.isoformat(timespec="seconds"),
+                "heat_threshold": heat_thr, **out}
 
 
 def _r(x: float | None, nd: int = 1) -> float | None:

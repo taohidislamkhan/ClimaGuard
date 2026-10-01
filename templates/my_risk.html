@@ -66,8 +66,13 @@
       </div>
     {% endcall %}
 
+    <!-- Personal advisory (rule-based) -->
+    {% call ui.card("Your personal advisory", "user-round-check", cls="p-4", chip_html=ui.chip("Rule-based", "Personal level = matrix[regional band from the ML model][your sensitivity from the profile rules], plus live air / heat floors. Your profile never enters the model. Rules and sources: How It Works → Personal Advisory Engine.")) %}
+      <div class="mt-3" id="pa-box">{{ ui.skeleton_lines(3) }}</div>
+    {% endcall %}
+
     <!-- Advisory -->
-    {% call ui.card("Advisory actions", "bell", cls="p-4", chip_html=ui.chip("Rule engine", "From src/core/advisory.py (thresholds in params.yaml). A disease advisory fires when its model score is in the top 20% of training weeks.")) %}
+    {% call ui.card("Regional advisory actions", "bell", cls="p-4", chip_html=ui.chip("Rule engine", "From src/core/advisory.py (thresholds in params.yaml). A disease advisory fires when its model score is in the top 20% of training weeks.")) %}
       <div class="mt-3" id="adv-box"></div>
       <div class="mt-3">{{ ui.disclaimer("This is an environmental risk estimate, not a medical diagnosis. General environmental health guidance — for medical concerns, consult a qualified healthcare professional.") }}</div>
     {% endcall %}

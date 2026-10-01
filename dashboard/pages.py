@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import advisory, scoring, shap_utils, weather_client
+from . import advisory, personal_rules, scoring, shap_utils, weather_client
 from src.core.features import drop_first_week
 from src.utils import paths
 from src.utils.config import load_params
@@ -230,7 +230,16 @@ class PageData:
                           "sources": [r["source"] for r in recent]},
             "disclaimer": advisory.DISCLAIMER,
             "profile": profile,
+            "personal": self._personal(key, loc),
         }
+
+    def _personal(self, key: str, loc: str) -> dict:
+        """This disease's personal evaluation (rules fired, level, actions)."""
+        pa = self.svc.personal_advisory(loc)
+        d = next(x for x in pa["diseases"] if x["disease"] == key)
+        severe = personal_rules.LEVELS.index(d["personal_level"]) >= personal_rules.LEVELS.index("High")
+        return {"personalized": pa["personalized"], **d,
+                "red_flags": [d["red_flag"]] if severe else [], "disclaimer": pa["disclaimer"]}
 
     # -- Environment -----------------------------------------------------------
     def environment(self, loc: str) -> dict:
@@ -398,6 +407,13 @@ class PageData:
             "features": artifact("features.json"), "metrics": metrics,
             "regressors": regressors, "shap": artifact("shap_global.json"),
             "advisory_table": adv_table,
+            "personal_engine": {
+                "rules": personal_rules.rule_table(),
+                "matrix": personal_rules.MATRIX,
+                "overrides": personal_rules.CFG["overrides"],
+                "heat_threshold": self.svc.climatology().heatwave_tmax,
+                "sources": list(personal_rules.SOURCES.values()),
+            },
             "split": {"train_end": split["train_end"], "val_end": split["val_end"],
                       "test_start": tp["start"], "test_end": tp["end"],
                       "sizes": {k: v["rows"] for k, v in json.loads(paths.SPLIT_SUMMARY.read_text()).items()}},
@@ -421,11 +437,12 @@ class PageData:
                          for k in DISEASE_ORDER]}
 
     # -- My Health ---------------------------------------------------------------
-    def profile_preview(self, data: dict, loc: str) -> dict:
+    def profile_preview(self, data: dict, loc: str, lang: str = "en") -> dict:
         p = clean_profile(data, self.svc.profile)
         run, pred, scores = self._run_bits(loc)
         adj = scoring.personal_adjustments(p)
         return {
+            "advisory": self.svc.personal_advisory(loc, p, lang),
             "profile": p, "rules": scoring.rule_table(p), "cap": scoring.ADJUST_CAP,
             "diseases": [{"key": k, "label": DISEASE_LABELS[k], "model_score": round(scores[k]),
                           "points": adj.get(k, {}).get("points", 0),

@@ -76,6 +76,46 @@ const Components = {
       </div>`).join("");
   },
 
+  /**
+   * Personal advisory items (rule-based): level badge, actions, time window,
+   * a "Why?" expander with the rules that fired and their sources, then red flags.
+   */
+  personalAdvisories(el, pa, { large = false } = {}) {
+    const icon = { respiratory: "wind", heat: "sun", cardio: "heart-pulse", vector: "bug",
+                   waterborne: "droplet", general: "circle-check" };
+    const tone = (lvl) => ({ "Very High": "high", High: "high", Moderate: "moderate" }[lvl] || "low");
+    const bn = pa.lang === "bn";
+    const L = bn ? { why: "কেন?", when: "কখন", rules: "যে নিয়ম প্রযোজ্য", src: "উৎস", you: "আপনার জন্য", flags: "এই লক্ষণ দেখা দিলে" }
+                 : { why: "Why?", when: "When", rules: "Rules that fired", src: "Sources", you: "Personalized for you", flags: "Get help now if you notice" };
+    const items = pa.items.map((a) => `
+      <div class="adv ${large ? "adv-lg" : ""} tone-${tone(a.personal_level)} flex gap-3">
+        <div class="w-[30px] shrink-0 pt-[2px] grid justify-items-center"><i data-lucide="${icon[a.disease] || "info"}" class="w-[22px] h-[22px]" style="color:${RISK[a.personal_level].c}"></i></div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="adv-title">${esc(a.title)}</span>${badge(a.personal_level, a.personal_level_text)}
+            <span class="chip chip-personal !cursor-default">${L.you}</span>
+          </div>
+          <ul>${a.actions.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+          ${a.when ? `<div class="adv-when"><i data-lucide="clock" class="inline w-3 h-3 align-[-2px]"></i> ${esc(a.when)}</div>` : ""}
+          <details class="adv-why">
+            <summary>${L.why}</summary>
+            <p>${esc(a.why)}</p>
+            ${a.overrides?.length ? `<p>${a.overrides.map(esc).join(" ")}</p>` : ""}
+            ${a.rules_fired?.length ? `<div class="mt-1"><b>${L.rules}:</b> ${a.rules_fired.map((r) =>
+              `<span class="chip !cursor-help" data-tip="${esc(`${r.sensitivity} sensitivity — ${r.source}`)}">${esc(r.label)}</span>`).join(" ")}</div>` : ""}
+            <div class="mt-1"><b>${L.src}:</b> ${a.sources.map((s) =>
+              `<a href="${esc(s.url)}" target="_blank" rel="noopener" data-tip="${esc(s.label)}">${esc(s.label)}</a>`).join(" · ")}</div>
+          </details>
+        </div>
+      </div>`).join("");
+    const flags = pa.red_flags?.length ? `
+      <div class="red-flags">
+        <div class="flex items-center gap-2 font-semibold"><i data-lucide="siren" class="w-4 h-4"></i>${L.flags}</div>
+        <ul>${pa.red_flags.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+      </div>` : "";
+    el.innerHTML = items + flags;
+  },
+
   /** Wire pill tabs; onChange(key). */
   tabs(containerId, onChange) {
     const box = document.getElementById(containerId);

@@ -3,6 +3,13 @@ const RISK = {
   Low:      { c: "#22A06B", bg: "#E3F6EC" },
   Moderate: { c: "#F5A524", bg: "#FFF3D6" },
   High:     { c: "#E5484D", bg: "#FDE7E8" },
+  "Very High": { c: "#A1153A", bg: "#F9DDE5" },   // personal advisory only
+};
+
+/** Personal-advisory language (EN / Bangla), remembered per browser. */
+const Lang = {
+  get() { try { return localStorage.getItem("cg-lang") === "bn" ? "bn" : "en"; } catch (_) { return "en"; } },
+  set(v) { try { localStorage.setItem("cg-lang", v); } catch (_) { /* storage blocked */ } },
 };
 
 const SETTINGS = (window.APP && window.APP.settings) || { units: "C", theme: "light", default_location: "Dhaka" };
@@ -87,7 +94,7 @@ function chip(text, tip, cls = "") {
 }
 
 function badge(level, text) {
-  return level ? `<span class="badge lvl-${level}">${esc(text ?? level)}</span>` : `<span class="badge">–</span>`;
+  return level ? `<span class="badge lvl-${level.replace(/\s/g, "")}">${esc(text ?? level)}</span>` : `<span class="badge">–</span>`;
 }
 
 /* ---------------- header ---------------- */

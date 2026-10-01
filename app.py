@@ -152,15 +152,25 @@ def create_app(service: DashboardService | None = None) -> Flask:
     def api_methodology():
         return jsonify(data.methodology())
 
-    @app.route("/api/profile", methods=["GET", "POST"])
+    @app.route("/api/profile", methods=["GET", "POST", "DELETE"])
     def api_profile():
         if request.method == "POST":
             return jsonify(svc.update_profile(_json_body()))
-        return jsonify(svc.profile)
+        if request.method == "DELETE":
+            svc.app.delete_profile()
+            return jsonify(deleted=True, profile=svc.profile)
+        return jsonify({**svc.profile, "saved": svc.app.has_profile()})
+
+    def _lang() -> str:
+        return "bn" if request.args.get("lang") == "bn" else "en"
+
+    @app.get("/api/advisory/personal")
+    def api_personal_advisory():
+        return jsonify(_or_404(svc.personal_advisory, _location(), None, _lang()))
 
     @app.post("/api/profile/preview")
     def api_profile_preview():
-        return jsonify(data.profile_preview(_json_body(), _location()))
+        return jsonify(data.profile_preview(_json_body(), _location(), _lang()))
 
     @app.route("/api/settings", methods=["GET", "POST"])
     def api_settings():

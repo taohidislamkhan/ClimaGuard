@@ -7,7 +7,8 @@
     <form id="hp-form" class="mt-4" novalidate>
       <div class="grid grid-cols-2 gap-3">
         <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" maxlength="30" required></div>
-        <div class="field"><label for="f-age">Age</label><input id="f-age" name="age" type="number" min="1" max="110" required></div>
+        <div class="field"><label for="f-age">Age</label><input id="f-age" name="age" type="number" min="1" max="110" required>
+          <div class="hint">Age group: <b id="age-group">–</b></div></div>
         <div class="field col-span-2"><label for="f-location">Home division</label>
           <select id="f-location" name="location">{% for d in divisions %}<option>{{ d }}</option>{% endfor %}</select>
           <div class="hint">Pages show the division picked in the header; the default is set in Settings.</div></div>
@@ -38,15 +39,43 @@
         <div class="text-[12px] font-semibold text-[var(--heading)]">Smoking &amp; conditions</div>
         <div class="grid grid-cols-2 gap-2 mt-2">
           <label class="check"><input type="checkbox" name="smoking"> Smoker</label>
-          <label class="check"><input type="checkbox" name="asthma"> Asthma</label>
-          <label class="check"><input type="checkbox" name="cardiovascular_disease"> Cardiovascular disease</label>
+          <label class="check"><input type="checkbox" name="asthma"> Asthma / COPD</label>
+          <label class="check"><input type="checkbox" name="cardiovascular_disease"> Heart disease</label>
           <label class="check"><input type="checkbox" name="diabetes"> Diabetes</label>
+          <label class="check"><input type="checkbox" name="pregnancy"> Pregnancy</label>
+          <label class="check"><input type="checkbox" name="weakened_immunity"> Weakened immunity</label>
         </div>
       </div>
 
-      <div class="flex items-center gap-3 mt-5">
+      <div class="mt-4">
+        <div class="text-[12px] font-semibold text-[var(--heading)]">Exposure</div>
+        <div class="grid grid-cols-3 gap-3 mt-2 items-end">
+          <label class="check pb-2"><input type="checkbox" name="outdoor_work"> I work outdoors</label>
+          <div class="field"><label for="f-hours">Outdoor hours / day</label><input id="f-hours" name="outdoor_hours" type="number" step="0.5" min="0" max="24"></div>
+          <div class="field"><label for="f-commute">Commute</label>
+            <select id="f-commute" name="commute"><option value="walk">Walk</option><option value="rickshaw">Rickshaw</option><option value="bus">Bus</option><option value="car">Car</option></select></div>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <div class="text-[12px] font-semibold text-[var(--heading)]">Home</div>
+        <div class="grid grid-cols-3 gap-3 mt-2 items-end">
+          <label class="check pb-2"><input type="checkbox" name="has_cooling"> AC or fan</label>
+          <label class="check pb-2"><input type="checkbox" name="mosquito_nets"> Mosquito nets</label>
+          <div class="field"><label for="f-water">Drinking water</label>
+            <select id="f-water" name="water_source"><option value="tap">Tap</option><option value="filtered">Filtered</option><option value="boiled">Boiled</option><option value="tube_well">Tube-well</option></select></div>
+        </div>
+      </div>
+
+      <label class="check mt-4 !text-[12px] leading-snug" id="consent-row">
+        <input type="checkbox" name="consent" class="mt-0.5">
+        <span>I agree that ClimaGuard stores my health conditions <b>on this computer only</b> (local SQLite). They are never logged, never sent to an external service, and never used by the ML models. I can delete them at any time.</span>
+      </label>
+
+      <div class="flex items-center gap-3 mt-5 flex-wrap">
         <button type="submit" class="btn-primary" id="hp-save"><i data-lucide="save"></i> Save profile</button>
         <button type="button" class="btn-ghost" id="hp-reset">Discard changes</button>
+        <button type="button" class="btn-ghost !text-[var(--high)]" id="hp-delete"><i data-lucide="trash-2"></i> Delete my profile</button>
         <span class="text-[12px]" id="hp-status" role="status"></span>
       </div>
     </form>
@@ -57,8 +86,12 @@
     <div class="panel p-4 flex gap-3 items-start" style="border-color:var(--primary)">
       <i data-lucide="lock-keyhole" class="w-5 h-5 text-[var(--primary)] shrink-0 mt-0.5"></i>
       <div class="text-[13px] text-[var(--heading)]"><b>Your profile is never sent to the ML model.</b>
-        It only applies small transparent rule-based adjustments (at most ±10 points per disease) after the model has produced its scores.</div>
+        It feeds two transparent rule layers that run after the model: small score adjustments (at most ±10 points per disease) and the personal advisory below.</div>
     </div>
+
+    {% call ui.card("With this profile, today you would get:", "user-round-check", cls="p-5", sub="Live preview of your personal advisory for the division in the header. It updates as you edit, before you save.") %}
+      <div class="mt-3 space-y-[6px]" id="pv-advisory">{{ ui.skeleton_lines(4) }}</div>
+    {% endcall %}
 
     {% call ui.card("How your profile affects your scores", "sliders-horizontal", cls="p-5", sub="Live preview — updates as you edit, before you save.") %}
       <div class="mt-4 text-[12px] font-semibold text-[var(--heading)]">Rules</div>

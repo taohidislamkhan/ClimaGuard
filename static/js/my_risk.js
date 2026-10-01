@@ -100,6 +100,35 @@ function renderAdvisory(d) {
     </div>`;
 }
 
+function renderPersonal(d) {
+  const p = d.personal;
+  const box = document.getElementById("pa-box");
+  if (!p.personalized) {
+    box.innerHTML = `<div class="panel p-3 text-[12px]">No profile saved yet. <a class="text-[var(--primary)] underline" href="${Loc.link("/my-health")}">Fill in My Health</a>
+      to see your personal level, the rules that apply to you and what to do.</div>`;
+    return;
+  }
+  const sensTip = { normal: "No rule raised your sensitivity for this disease.",
+                    elevated: "At least one rule marks you as somewhat more sensitive.",
+                    high: "At least one rule marks you as a sensitive group." };
+  box.innerHTML = `
+    <div class="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center">
+      <div class="panel py-2"><div class="text-[11px]">Regional band (ML)</div><div class="mt-1">${badge(p.regional_band)}</div></div>
+      <div class="text-[16px] text-[var(--muted)]">×</div>
+      <div class="panel py-2" data-tip="${esc(sensTip[p.sensitivity])}"><div class="text-[11px]">Your sensitivity</div><div class="mt-1 text-[13px] font-semibold text-[var(--heading)] capitalize">${esc(p.sensitivity)}</div></div>
+      <div class="text-[16px] text-[var(--muted)]">→</div>
+      <div class="panel py-2"><div class="text-[11px]">Personal level</div><div class="mt-1">${badge(p.personal_level)}</div></div>
+    </div>
+    ${d.key === "cardio" ? '<p class="text-[11px] mt-2 text-[var(--muted)]">The cardio regional band follows the live AQI category (US EPA), because the cardio model has no predictive skill.</p>' : ""}
+    <div class="mt-3 text-[12px] font-semibold text-[var(--heading)]">Rules that fired</div>
+    <div class="mt-1 flex flex-wrap gap-1">${p.rules_fired.length ? p.rules_fired.map((r) =>
+      `<span class="chip !cursor-help" data-tip="${esc(`${r.sensitivity} sensitivity — ${r.source}`)}">${esc(r.label)} · ${esc(r.sensitivity)}</span>`).join("")
+      : '<span class="text-[12px] text-[var(--muted)]">None — normal sensitivity.</span>'}</div>
+    <div class="mt-3" id="pa-item"></div>`;
+  Components.personalAdvisories(document.getElementById("pa-item"),
+    { lang: "en", items: [{ ...p, disease: d.key }], red_flags: p.red_flags }, { large: true });
+}
+
 function load() {
   setActiveTab();
   return Page.run(() => apiLoc(`/api/disease/${current}`), (d) => {
@@ -110,6 +139,7 @@ function load() {
     renderSpark(d);
     renderShap(d);
     renderAdvisory(d);
+    renderPersonal(d);
   });
 }
 

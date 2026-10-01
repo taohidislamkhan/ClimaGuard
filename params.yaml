@@ -109,3 +109,22 @@ assets:
   shap_sample: 300       # test rows for the dashboard's global SHAP bars
   scatter_sample: 700    # points in the predicted-vs-actual scatter
   eda_sample: 1500       # points in the temperature-vs-heat scatter
+
+personal_advisory:
+  # Dashboard-only, rule-based layer (dashboard/personal_rules.py). No DVC stage
+  # reads it, so changing it never re-runs the pipeline; the profile never
+  # enters a model. personal_level = matrix[regional_band][sensitivity].
+  matrix:
+    Low:      {normal: Low,      elevated: Low,      high: Moderate}
+    Moderate: {normal: Moderate, elevated: Moderate, high: High}
+    High:     {normal: High,     elevated: High,     high: Very High}
+  # Live-value floors for people with HIGH respiratory or cardio sensitivity
+  # (US EPA AirNow breakpoints): above "sensitive groups" -> at least Moderate,
+  # above "unhealthy" -> at least High. Heat uses the heat-wave threshold
+  # (95th percentile of Dhaka daily max) -> at least Moderate.
+  overrides:
+    pm25_ugm3: 35.4
+    aqi: 100
+    pm25_unhealthy: 55.4
+    aqi_unhealthy: 150
+  max_items: 5

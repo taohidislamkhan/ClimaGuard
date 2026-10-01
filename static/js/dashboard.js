@@ -154,7 +154,29 @@ function renderAdvisories(d) {
   Components.advisories(document.getElementById("advisories"), d.advisories);
   document.getElementById("adv-footer").innerHTML =
     `<b class="font-medium text-[var(--body)]">${esc(d.disclaimer)}</b> ${esc(d.advisory_footer)}`;
+  loadPersonal();
 }
+
+/* Personal advisories replace the regional ones once a profile is saved. */
+async function loadPersonal() {
+  let pa;
+  try { pa = await apiLoc(`/api/advisory/personal?lang=${Lang.get()}`); } catch (e) { console.error(e); return; }
+  if (!pa.personalized) return;                       // keep the regional advisories
+  Components.personalAdvisories(document.getElementById("advisories"), pa);
+  document.getElementById("adv-chip").innerHTML = chip("Personalized for you",
+    "Rule-based: your regional (ML) risk band × your sensitivity from the My Health profile, plus live air and heat checks. " +
+    "Your profile never enters the ML models. Open \"Why?\" on an item for the rules and their public-health sources.");
+  document.getElementById("adv-footer").innerHTML = `<b class="font-medium text-[var(--body)]">${esc(pa.disclaimer)}</b>`;
+  const tg = document.getElementById("adv-lang");
+  tg.classList.remove("hidden");
+  tg.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.lang === pa.lang));
+  lucide.createIcons();
+}
+
+document.getElementById("adv-lang").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (b && b.dataset.lang !== Lang.get()) { Lang.set(b.dataset.lang); loadPersonal(); }
+});
 
 function renderChanges(d) {
   const c = d.changes;

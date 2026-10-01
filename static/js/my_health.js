@@ -5,6 +5,13 @@ const status = document.getElementById("hp-status");
 let saved = null;
 let bmiMode = "bmi";
 let previewTimer = null;
+const CONDITIONS = ["asthma", "cardiovascular_disease", "diabetes", "pregnancy", "weakened_immunity"];
+const BOOLS = ["smoking", ...CONDITIONS, "outdoor_work", "has_cooling", "mosquito_nets", "consent"];
+
+function ageGroup(age) {
+  if (!(age > 0)) return "–";
+  return age < 12 ? "Child (under 12)" : age < 18 ? "Teen (12–17)" : age < 65 ? "Adult (18–64)" : "Older adult (65+)";
+}
 
 function setBmiMode(mode) {
   bmiMode = mode;
@@ -22,7 +29,10 @@ function fill(p) {
   F.weight_kg.value = p.weight_kg ?? "";
   F.activity.value = p.activity;
   F.outdoor_exposure.value = p.outdoor_exposure;
-  ["smoking", "asthma", "cardiovascular_disease", "diabetes"].forEach((k) => { F[k].checked = !!p[k]; });
+  BOOLS.forEach((k) => { F[k].checked = !!p[k]; });
+  F.outdoor_hours.value = p.outdoor_hours ?? "";
+  F.commute.value = p.commute;
+  F.water_source.value = p.water_source;
   setBmiMode(p.height_cm && p.weight_kg ? "hw" : "bmi");
   updateAutoBmi();
 }
@@ -32,9 +42,9 @@ function collect() {
   const body = {
     name: F.name.value.trim(), age: n(F.age.value), location: F.location.value,
     activity: F.activity.value, outdoor_exposure: F.outdoor_exposure.value,
-    smoking: F.smoking.checked, asthma: F.asthma.checked,
-    cardiovascular_disease: F.cardiovascular_disease.checked, diabetes: F.diabetes.checked,
+    outdoor_hours: n(F.outdoor_hours.value), commute: F.commute.value, water_source: F.water_source.value,
   };
+  BOOLS.forEach((k) => { body[k] = F[k].checked; });
   if (bmiMode === "hw") {
     body.height_cm = n(F.height_cm.value);
     body.weight_kg = n(F.weight_kg.value);
@@ -47,6 +57,7 @@ function collect() {
 }
 
 function updateAutoBmi() {
+  document.getElementById("age-group").textContent = ageGroup(Number(F.age.value));
   const h = Number(F.height_cm.value), w = Number(F.weight_kg.value);
   document.getElementById("bmi-auto").textContent = h > 0 && w > 0 ? (w / (h / 100) ** 2).toFixed(1) : "–";
 }
@@ -72,12 +83,13 @@ function renderPreview(pv) {
       <td>${d.model_score} ${badge(level(d.model_score))}</td>
       <td class="${d.points > 0 ? "up" : ""}">${d.points > 0 ? "+" : ""}${d.points}${d.capped ? ` <span class="text-[11px] text-[var(--muted)]" data-tip="Rules add up to +${d.raw_points}; capped at ±${pv.cap}.">(capped from +${d.raw_points})</span>` : ""}</td>
       <td><b>${d.score}</b> ${badge(level(d.score))}</td></tr>`).join("");
+  Components.personalAdvisories(document.getElementById("pv-advisory"), pv.advisory);
   lucide.createIcons();
 }
 
 async function preview() {
   try {
-    renderPreview(await apiLoc("/api/profile/preview", { method: "POST", body: JSON.stringify(collect()) }));
+    renderPreview(await apiLoc(`/api/profile/preview?lang=${Lang.get()}`, { method: "POST", body: JSON.stringify(collect()) }));
     form.querySelectorAll(".field").forEach((f) => f.classList.remove("invalid"));
   } catch (e) {
     setStatus(e.message, "error");
@@ -99,8 +111,29 @@ document.getElementById("bmi-mode").addEventListener("click", (ev) => {
 });
 document.getElementById("hp-reset").addEventListener("click", () => { fill(saved); schedulePreview(); setStatus(""); });
 
+document.getElementById("hp-delete").addEventListener("click", async () => {
+  if (!confirm("Delete your saved profile, including any health conditions? This cannot be undone.")) return;
+  try {
+    const r = await api("/api/profile", { method: "DELETE" });
+    fill(r.profile);
+    saved = collect();
+    setProfileHeader(r.profile);
+    setStatus("Profile deleted. The dashboard shows regional advisories again.", "ok");
+    preview();
+  } catch (e) {
+    setStatus(e.message, "error");
+  }
+});
+
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
+  const consentRow = document.getElementById("consent-row");
+  consentRow.classList.remove("invalid");
+  if (CONDITIONS.some((k) => F[k].checked) && !F.consent.checked) {
+    consentRow.classList.add("invalid");
+    setStatus("Tick the consent box before saving a health condition.", "error");
+    return;
+  }
   const btn = document.getElementById("hp-save");
   btn.disabled = true;
   setStatus("Saving…");
