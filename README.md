@@ -262,19 +262,19 @@ The tables below are generated from `reports/metrics/*.json` by
 | Model | Accuracy | Macro-F1 | ROC-AUC (OvR, weighted) |
 |---|---|---|---|
 | Logistic Regression ★ selected | 0.820 | 0.819 | 0.944 |
-| Random Forest | 0.809 | 0.809 | 0.938 |
-| XGBoost | 0.806 | 0.805 | 0.936 |
-| Decision Tree | 0.785 | 0.783 | 0.907 |
+| Random Forest | 0.807 | 0.807 | 0.937 |
+| XGBoost | 0.812 | 0.812 | 0.937 |
+| Decision Tree | 0.786 | 0.784 | 0.909 |
 
 **Disease regressors** (validation winner per disease), test split:
 
 | Disease | Model | R² | MAE | RMSE | Random Forest R² |
 |---|---|---|---|---|---|
-| Respiratory | Random Forest | 0.559 | 8.12 | 10.17 | 0.559 |
+| Respiratory | Random Forest | 0.559 | 8.13 | 10.18 | 0.559 |
 | Vector-borne | Random Forest | 0.916 | 3.42 | 5.11 | 0.916 |
 | Heat-related | XGBoost | 0.832 | 2.58 | 4.02 | 0.803 |
 | Waterborne | Random Forest | 0.626 | 3.10 | 3.99 | 0.626 |
-| Cardiovascular | ElasticNet | -0.008 | 4.47 | 5.63 | -0.017 |
+| Cardiovascular | ElasticNet | -0.008 | 4.47 | 5.63 | -0.018 |
 
 **Top SHAP features** (mean |SHAP| of the saved winner on test weeks):
 
