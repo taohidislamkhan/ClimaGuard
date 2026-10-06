@@ -1,0 +1,32 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo.
+# Render asks for the `sync: false` values on first deploy.
+services:
+  - type: web
+    name: climaguard
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Free: spins down after ~15 idle minutes, 512 MB RAM, no disk (accounts
+    # reset on every restart/redeploy; ADMIN_* recreates the admin).
+    # For accounts that persist, switch to `starter` and uncomment `disk`.
+    plan: free
+    healthCheckPath: /api/about
+    autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      # Read access to the private DagsHub DVC remote (used only at build time).
+      - key: DAGSHUB_USER
+        sync: false
+      - key: DAGSHUB_TOKEN
+        sync: false
+      # First admin, created at startup if missing (see wsgi.py).
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+    # disk:
+    #   name: climaguard-db
+    #   mountPath: /app/instance
+    #   sizeGB: 1

@@ -287,16 +287,19 @@ def create_app(service: DashboardService | None = None, config: dict | None = No
     return app
 
 
-if __name__ == "__main__":
+def start_warmup(app: Flask) -> None:
+    """Fetch live data + run the models, then build the SHAP explainers, in a
+    background thread so the first page loads don't pay for either."""
     import threading
 
-    application = create_app()
-
     def warm():
-        # Fetch live data + run the models, then build the SHAP explainers,
-        # so the first page loads don't pay for either.
-        application.config["SERVICE"].model_run()
-        application.config["PAGES_DATA"].warm()
+        app.config["SERVICE"].model_run()
+        app.config["PAGES_DATA"].warm()
 
     threading.Thread(target=warm, daemon=True).start()
+
+
+if __name__ == "__main__":
+    application = create_app()
+    start_warmup(application)
     application.run(debug=False, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5000)))

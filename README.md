@@ -230,6 +230,13 @@ docker build -t climaguard .
 docker run --rm -p 5000:5000 -e SECRET_KEY=<random> -v climaguard-db:/app/instance climaguard
 ```
 
+**Render.** `render.yaml` is a Blueprint: in Render, go to *New → Blueprint* and pick this repo.
+When asked, set `DAGSHUB_USER` and `DAGSHUB_TOKEN` (a DagsHub access token with read access to
+the DVC remote; the Docker build uses them to `dvc pull` the models) and `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` (the first admin, created at startup by `wsgi.py`). `SECRET_KEY` is generated
+for you. The free plan has no disk, so accounts reset when the service restarts. Switch to
+`starter` and uncomment the `disk` block to keep them.
+
 ## 6. DVC workflow
 
 | Command | What it shows |
