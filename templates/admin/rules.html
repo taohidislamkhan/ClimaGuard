@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<div class="panel p-3 mt-2 flex items-center gap-2 text-[13px] text-[var(--heading)]">
+  <i data-lucide="file-cog" class="w-4 h-4 text-[var(--primary)]"></i>
+  Read-only. To change the matrix or thresholds, edit <code>personal_advisory</code> in <code>params.yaml</code> and run <code>dvc repro</code>; rules live in <code>dashboard/personal_rules.py</code>.
+</div>
+
+<div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);">
+  {% call ui.card("Personal sensitivity rules", "list-checks", cls="p-5", sub="Each rule matches one profile field and raises one disease's sensitivity. A disease's sensitivity is the highest of its matching rules.") %}
+    <table class="tbl mt-3"><thead><tr><th>Disease</th><th>Condition</th><th>Sensitivity</th><th>Source</th></tr></thead><tbody>
+      {% for r in rules %}
+        <tr><td class="capitalize">{{ r.disease }}</td><td>{{ r.condition }}</td>
+          <td><span class="badge lvl-{{ 'High' if r.sensitivity == 'high' else 'Moderate' }}">{{ r.sensitivity }}</span></td>
+          <td class="text-[12px]"><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer" class="text-[var(--primary)] hover:underline">{{ r.source }}</a></td></tr>
+      {% endfor %}
+    </tbody></table>
+  {% endcall %}
+
+  <div class="space-y-4 min-w-0">
+    {% call ui.card("Decision matrix", "grid-3x3", cls="p-5", sub="personal level = matrix[regional band][sensitivity] (params.yaml → personal_advisory.matrix).") %}
+      <table class="tbl mt-3"><thead><tr><th>Regional band</th>{% for s in ["normal", "elevated", "high"] %}<th class="capitalize">{{ s }}</th>{% endfor %}</tr></thead><tbody>
+        {% for band, row in matrix.items() %}
+          <tr><td><span class="badge lvl-{{ band }}">{{ band }}</span></td>
+            {% for s in ["normal", "elevated", "high"] %}<td><span class="badge lvl-{{ row[s] | replace(' ', '') }}">{{ row[s] }}</span></td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody></table>
+    {% endcall %}
+
+    {% call ui.card("Live overrides", "gauge", cls="p-5", sub="Live values that raise the personal level regardless of the matrix.") %}
+      <table class="tbl mt-3"><tbody>
+        {% for k, v in overrides.items() %}<tr><td class="mono text-[12px]">{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}
+      </tbody></table>
+    {% endcall %}
+
+    {% call ui.card("Sources", "book-open", cls="p-5") %}
+      <ul class="mt-3 space-y-1.5 text-[12.5px]">
+        {% for s in sources %}<li><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer" class="text-[var(--primary)] hover:underline">{{ s.label }}</a></li>{% endfor %}
+      </ul>
+    {% endcall %}
+  </div>
+</div>
+{% endblock %}

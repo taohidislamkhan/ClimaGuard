@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% from "auth/_fields.html" import field %}
+{% block content %}
+<div class="grid gap-4 mt-2" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+  <div class="space-y-4 min-w-0">
+    {% call ui.card("Account", "user-round-cog", cls="p-5", sub="Your sign-in details. Admins can see these (not your health profile).") %}
+      <dl class="grid grid-cols-[120px_1fr] gap-y-2 mt-4 text-[13px]">
+        <dt>Email</dt><dd class="text-[var(--heading)] font-medium">{{ email }}</dd>
+        <dt>Role</dt><dd><span class="role-pill {% if role != 'admin' %}role-user{% endif %}">{{ role | capitalize }}</span></dd>
+        <dt>Member since</dt><dd class="text-[var(--heading)]">{{ created.strftime("%d %b %Y") }}</dd>
+      </dl>
+      <form method="post" action="{{ url_for('auth.account_name') }}" class="mt-5 flex items-end gap-3" novalidate data-validate>
+        {{ name_form.csrf_token }}
+        <div class="flex-1">{{ field(name_form.name, autocomplete="name") }}</div>
+        <button type="submit" class="btn-secondary !h-[34px] mb-[1px]"><i data-lucide="save"></i> Save name</button>
+      </form>
+    {% endcall %}
+
+    {% call ui.card("Change password", "key-round", cls="p-5", sub="Changing it signs you out on other devices.") %}
+      <form method="post" action="{{ url_for('auth.account_password') }}" class="mt-4 space-y-3 max-w-[420px]" novalidate data-validate>
+        {{ pw_form.csrf_token }}
+        {{ field(pw_form.current, autocomplete="current-password") }}
+        {{ field(pw_form.password, autocomplete="new-password", hint=password_rule) }}
+        {{ field(pw_form.confirm, autocomplete="new-password") }}
+        <button type="submit" class="btn-primary"><i data-lucide="key-round"></i> Change password</button>
+      </form>
+    {% endcall %}
+  </div>
+
+  <div class="space-y-4 min-w-0">
+    {% call ui.card("Your data", "lock-keyhole", cls="p-5") %}
+      <ul class="mt-3 space-y-2 text-[13px]">
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-[var(--low)] shrink-0 mt-0.5"></i>Your health profile is visible only to you. Admins see account metadata only.</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-[var(--low)] shrink-0 mt-0.5"></i>Passwords are stored as salted scrypt hashes, never as text.</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-[var(--low)] shrink-0 mt-0.5"></i>Your profile never enters the ML models. It only feeds the rule-based personal layer.</li>
+      </ul>
+      <a href="/my-health" data-keep-loc class="btn-ghost mt-4">Edit health profile <i data-lucide="arrow-right"></i></a>
+    {% endcall %}
+
+    <section class="card p-5" style="border-color: var(--adv-high-b)">
+      <h3 class="card-title flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4 text-[var(--high)]"></i>Delete account</h3>
+      <p class="card-sub mt-[4px]">Deletes your account, health profile and settings. This cannot be undone.</p>
+      <form method="post" action="{{ url_for('auth.account_delete') }}" class="mt-4 space-y-3 max-w-[420px]" novalidate
+            data-validate="loose" data-confirm="Delete your account, health profile and settings permanently?">
+        {{ del_form.csrf_token }}
+        {{ field(del_form.password, autocomplete="current-password") }}
+        <button type="submit" class="btn-primary !bg-[var(--high)] !shadow-none"><i data-lucide="trash-2"></i> Delete my account</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+{% endblock %}

@@ -209,16 +209,16 @@ def test_forecast_and_failure(client, monkeypatch):
     assert r.status_code == 502 and "unavailable" in r.get_json()["detail"]
 
 
-def test_profile_saved_in_sqlite_and_preview(client, svc):
+def test_profile_saved_in_sqlite_and_preview(client, db_profile):
     p = client.post("/api/profile", json={"height_cm": 170, "weight_kg": 95, "diabetes": True, "consent": True}).get_json()
     assert p["bmi"] == round(95 / 1.7 ** 2, 1) and p["bmi"] >= 30
-    assert svc.app.profile()["diabetes"] is True             # persisted, not just in memory
+    assert db_profile()["diabetes"] is True                  # persisted, not just in memory
     pv = client.post("/api/profile/preview", json={"age": 70, "diabetes": False}).get_json()
     fired = {r["label"] for r in pv["rules"] if r["fires"]}
     assert "Age 65 or over" in fired and "Diabetes" not in fired and "BMI 30 or over" in fired
     heat = {d["key"]: d for d in pv["diseases"]}["heat"]
     assert heat["points"] == 10 and heat["capped"]            # 3 (outdoor) + 5 (age) + 3 (BMI) = 11 -> 10
-    assert svc.app.profile()["age"] != 70                     # preview does not save
+    assert db_profile()["age"] != 70                          # preview does not save
 
 
 def test_profile_validation(client):
@@ -231,8 +231,8 @@ def test_settings_persist_and_apply(client, svc):
                                            "default_location": "Rangpur",
                                            "notifications": {"daily_summary": True}}).get_json()
     assert s["units"] == "F" and s["notifications"]["daily_summary"] is True
-    assert svc.app.settings()["theme"] == "dark"                      # persisted in SQLite
-    assert svc.run_ttl == 15 * 60                                     # refresh interval drives the cache
+    assert client.get("/api/settings").get_json()["theme"] == "dark"  # persisted per user
+    assert svc.run_ttl == 30 * 60             # one shared model cache; the setting drives page reloads
     assert client.get("/api/dashboard").get_json()["location"]["name"] == "Rangpur"
     html = client.get("/settings").get_data(as_text=True)
     assert 'data-theme="dark"' in html                               # theme applied server-side

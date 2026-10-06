@@ -2,8 +2,8 @@
 
 One *model run* covers all eight divisions at once (a batch of eight
 feature rows through each model) and is cached for 30 minutes; the
-requested location, the user's profile and the history lookups are applied
-per request on top of it.
+requested location, the signed-in user's profile (passed in by the caller,
+None for guests) and the history lookups are applied per request on top of it.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import pandas as pd
 from . import advisory, personal_rules, scoring, shap_utils, weather_client
 from .history import History
 from .inference import MODEL_NAMES, TARGETS, ModelStore, Prediction
-from .storage import DEFAULT_PROFILE, AppStore
+from .storage import DEFAULT_PROFILE, DEFAULT_SETTINGS
 
 TZ = ZoneInfo("Asia/Dhaka")
 DISEASE_ORDER = ["respiratory", "vector", "heat", "waterborne", "cardio"]
@@ -55,24 +55,35 @@ class ModelRun:
 
 
 class DashboardService:
-    def __init__(self, history: History | None = None, app_store: AppStore | None = None,
+    def __init__(self, history: History | None = None,
                  store: ModelStore | None = None) -> None:
         self.store = store or ModelStore()
         self.history = history or History()
-        self.app = app_store or AppStore()
+        self.ttl_minutes = DEFAULT_SETTINGS["refresh_minutes"]   # shared by all users
         self._clim = None
         self._run: ModelRun | None = None
         self._lock = threading.Lock()
         self._drivers: dict[tuple, str | None] = {}
 
     @property
-    def profile(self) -> dict:
-        return self.app.profile()
-
-    @property
     def run_ttl(self) -> int:
-        """Seconds a model run stays fresh (Settings -> data refresh interval)."""
-        return int(self.app.settings()["refresh_minutes"]) * 60
+        """Seconds a model run stays fresh. One run serves every user, so this
+        is server-wide; a user's refresh interval drives their page reloads."""
+        return int(self.ttl_minutes) * 60
+
+    def run_status(self) -> dict | None:
+        """Live/fallback state and age of the cached model run (admin status card)."""
+        run = self._run
+        if run is None:
+            return None
+        return {"live": run.live, "computed_at": run.computed_at.isoformat(timespec="seconds"),
+                "age_seconds": round(time.time() - run.computed_at.timestamp())}
+
+    def clear_cache(self) -> None:
+        """Drop cached weather and the cached model run; the next request refetches."""
+        weather_client.clear_cache()
+        with self._lock:
+            self._run = None
 
     # -- climatology / live data ---------------------------------------------
     def climatology(self):
@@ -183,7 +194,11 @@ class DashboardService:
                  "rainfall": float(row["precipitation_mm"])})
 
     # -- payload ---------------------------------------------------------------
-    def dashboard(self, location: str = "Dhaka", force: bool = False) -> dict:
+    def dashboard(self, location: str = "Dhaka", force: bool = False,
+                  profile: dict | None = None) -> dict:
+        """Dashboard payload. ``profile`` is the signed-in user's saved profile;
+        None (guest, or no profile yet) gives the regional view without
+        personal score adjustments."""
         if location not in weather_client.DIVISIONS:
             raise KeyError(location)
         run = self.model_run(force)
@@ -199,7 +214,7 @@ class DashboardService:
         recent = self.history.recent(location, 7)
         demo_history = (not run.live) or any(r["source"] == "backfill" for r in recent)
 
-        adjustments = scoring.personal_adjustments(self.profile)
+        adjustments = scoring.personal_adjustments(profile) if profile else {}
 
         def change(key: str) -> float | None:
             """Change in score points versus the previous snapshot."""
@@ -296,12 +311,9 @@ class DashboardService:
             "advisory_footer": advisory.FOOTER,
             "changes": changes,
             "map": risk_map,
-            "profile": self.profile,
+            "profile": profile,
             "updated_at": run.computed_at.isoformat(timespec="seconds"),
         }
-
-    def update_profile(self, data: dict) -> dict:
-        return self.app.save_profile(data)
 
     # -- personal advisory (rule-based; the profile never enters a model) ------
     def _top_driver(self, run: ModelRun, loc: str, key: str) -> str | None:
@@ -315,14 +327,14 @@ class DashboardService:
 
     def personal_advisory(self, location: str, profile: dict | None = None,
                           lang: str = "en") -> dict:
-        """Personal advisory for ``profile`` (default: the saved one).
+        """Personal advisory for ``profile`` (the caller's saved or previewed one).
 
-        ``personalized`` is False when no profile is saved and none is given;
-        the dashboard then keeps the regional advisories."""
+        ``personalized`` is False when no profile is given; the dashboard then
+        keeps the regional advisories."""
         if location not in weather_client.DIVISIONS:
             raise KeyError(location)
-        personalized = profile is not None or self.app.has_profile()
-        profile = profile if profile is not None else self.profile
+        personalized = profile is not None
+        profile = profile if profile is not None else DEFAULT_PROFILE
         run = self.model_run()
         scores = self.model_scores(run.preds[location])
         now_env = run.env_now[location]

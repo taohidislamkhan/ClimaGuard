@@ -97,16 +97,19 @@ ClimaGuard/
 │   ├── shap/                   # global SHAP per model (JSON + PNG)
 │   └── drift/                  # drift_report.json, per-feature PSI/KS, drift.png
 ├── artifacts/                  # precomputed dashboard JSON (assets stage)
-├── app.py                      # Flask entry point (pages + JSON API)
-├── dashboard/                  # inference, scoring, SHAP, advisories, Open-Meteo client, SQLite
+├── app.py                      # Flask entry point (pages + JSON API, security setup)
+├── dashboard/                  # inference, scoring, SHAP, advisories, Open-Meteo client, SQLite,
+│                               # accounts: auth.py, admin.py, models.py, security.py, cli.py
+├── instance/app.db             # users, profiles, settings, audit log (git-ignored, not DVC)
 ├── templates/ static/          # Jinja pages, CSS/JS, GeoJSON maps
-├── tests/                      # pytest: API, scoring, pipeline outputs (55 tests)
+├── tests/                      # pytest: API, scoring, advisories, auth/RBAC, pipeline outputs (185 tests)
 ├── docs/screenshots/           # dashboard screenshots
 ├── params.yaml                 # every tunable value
 ├── dvc.yaml / dvc.lock         # pipeline definition / exact hashes of the last run
 ├── data_card.md / eda_summary.md   # dataset documentation and EDA findings
 ├── Dockerfile                  # dashboard container
-└── requirements.txt            # pinned versions
+├── requirements.txt            # pinned versions
+└── .env.example                # SECRET_KEY template (copy to the git-ignored .env)
 ```
 
 ## 4. DVC pipeline
@@ -207,20 +210,24 @@ dvc remote modify --local origin password <your-dagshub-token>
 
 dvc pull          # raw data, models and all outputs for this commit
 dvc repro         # "Data and pipelines are up to date." — or rebuilds what changed
+
+copy .env.example .env                # Linux / macOS: cp; then set SECRET_KEY (see §10)
+flask init-db
+flask create-admin --email you@example.com --name "Your Name" --import-legacy
 python app.py     # dashboard at http://127.0.0.1:5000
 python -m pytest -q
 ```
 
 Without remote access, place the raw CSV at `data/raw/` and run `dvc repro`. The full run takes about 7 minutes on a 4-core laptop. `train` (~4 min) and `explain` (~2 min) are the slow stages.
 
-**Tests.** `python -m pytest -q` runs 55 offline tests (Open-Meteo is faked): the API, the
-scoring rules, the pipeline outputs, and a check that the results tables below match
-`reports/metrics/`. `test_inference_latency` has a tight time budget and can be flaky on a busy machine.
+**Tests.** `python -m pytest -q` runs 185 offline tests (Open-Meteo is faked): the API, the
+scoring rules, the personal advisory engine, sign-up/log-in and role-based access, the pipeline
+outputs, and a check that the results tables below match `reports/metrics/`. `test_inference_latency` has a tight time budget and can be flaky on a busy machine.
 
 **Docker** (dashboard only; run `dvc pull` first so the model outputs are in the build context):
 ```bash
 docker build -t climaguard .
-docker run --rm -p 5000:5000 climaguard     # http://localhost:5000
+docker run --rm -p 5000:5000 -e SECRET_KEY=<random> -v climaguard-db:/app/instance climaguard
 ```
 
 ## 6. DVC workflow
@@ -339,8 +346,9 @@ Revert it the same way as the parameter demo in §6.
 On first start it loads the six models (~2–8 s) and caches Dhaka's 2015–2025
 climatology from Open-Meteo in `data/cache/dhaka_climatology.json`. A background
 thread then fetches live weather, runs the models and builds the SHAP explainers.
-Stale data is served immediately while a refresh runs (the interval comes from Settings).
-Profile and settings are stored in SQLite (`data/cache/risk_history.db`, git-ignored).
+Stale data is served immediately while a refresh runs (every 30 minutes, shared by all users).
+Accounts, profiles and settings are stored per user in `instance/app.db` (see §10); the regional
+risk history stays in `data/cache/risk_history.db`. Both are git-ignored and not DVC-tracked.
 
 | Page | Content |
 |---|---|
@@ -349,9 +357,11 @@ Profile and settings are stored in SQLite (`data/cache/risk_history.db`, git-ign
 | `/environment` | live tiles ("Used by model" / "Display only"), 7-day forecast, 72-h PM2.5/AQI, heat-wave watch |
 | `/risk-map` | Bangladesh divisions (live, marked Demo) or 25 countries on test weeks, with a detail drawer |
 | `/risk-history` | score history with risk bands, predicted vs actual on the test period, month × disease heatmap, CSV export |
-| `/my-health` | health profile with a live preview of each rule; never sent to the model |
+| `/my-health` | health profile with a live preview of each rule; never sent to the model (log-in required) |
 | `/how-it-works` | 12 sections from scope to limitations, incl. model health / drift; every number from `artifacts/*.json` |
-| `/settings` | units, theme, default location, refresh interval |
+| `/settings` | units, theme, default location, dashboard reload interval (log-in required) |
+| `/account` | change name or password, delete the account |
+| `/admin/*` | admins only: overview, users, model & data, advisory rules, audit log (§10) |
 
 Every page has a JSON API under `/api/` (e.g. `/api/dashboard?loc=Dhaka`,
 `/api/disease/<key>`, `/api/map`, `/api/history`, `/api/methodology`, `POST /api/recalculate`).
@@ -370,3 +380,65 @@ Every page has a JSON API under `/api/` (e.g. `/api/dashboard?loc=Dhaka`,
 | ![Risk Map](docs/screenshots/risk_map.png) | ![How it works](docs/screenshots/how_it_works.png) |
 
 More screenshots: [`docs/screenshots/`](docs/screenshots/).
+
+## 10. Authentication & Roles
+
+The dashboard has accounts with two roles. **Auth is a serving feature only:** it is not part of
+the DVC pipeline, `dvc.yaml` and the models are unchanged, and `dvc status` still reports
+"Data and pipelines are up to date." The user database `instance/app.db` is git-ignored and not
+DVC-tracked (it is runtime state, not a reproducible pipeline output).
+
+**Setup**
+
+```bash
+copy .env.example .env      # Linux / macOS: cp .env.example .env
+python -c "import secrets; print(secrets.token_hex(32))"   # paste as SECRET_KEY in .env
+flask init-db               # creates instance/app.db (safe to run again)
+flask create-admin --email you@example.com --name "Your Name" [--import-legacy]
+flask seed-demo             # optional, viva only: 1 demo admin + 2 demo users, passwords printed once
+```
+
+- `.env` holds `SECRET_KEY` (required, the app refuses to start without it) and `SESSION_COOKIE_SECURE` (`1` behind HTTPS).
+- `create-admin` asks for the password twice with `getpass`. No credentials are stored in the code.
+- `--import-legacy` moves the old single-user profile/settings (from `data/cache/risk_history.db`) to the new admin and drops those old tables.
+
+**Who can see what**
+
+| Area | Guest | User | Admin |
+|---|---|---|---|
+| `/login`, `/signup`, `/how-it-works` | ✅ | ✅ | ✅ |
+| Dashboard, Environment, Risk Map, Risk History | ✅ regional view + "Log in for personalized advice" | ✅ | ✅ |
+| My Risk, My Health, Settings, `/account`, personal APIs (`/api/profile*`, `/api/advisory/personal`, `/api/disease/*`, `/api/settings`, `POST /api/recalculate`) | ❌ login redirect / JSON 401 | ✅ own data only | ✅ own data only |
+| `/admin/*`, `/api/admin/*` | ❌ login redirect / JSON 401 | ❌ 403 page / JSON 403 | ✅ |
+
+- Every profile and settings lookup goes through `current_user`. No endpoint accepts a `user_id` from a normal user.
+- **Privacy rule:** admin pages show account metadata only (name, email, role, status, dates). Health data is visible only to its owner. A test checks that no admin response contains health fields.
+- **Admin panel:** user search and pagination, with promote/demote, activate/deactivate, temporary password and unlock. Every action asks for confirmation and is audit-logged. An admin cannot demote or deactivate themselves, and at least one active admin always remains.
+- **Model & Data:** read-only metrics and drift, "Recalculate all divisions", "Clear weather cache". There is no `dvc repro` button.
+- **Audit log:** filter by action, user and date, with CSV export.
+- **Forgot password:** there is no email server, so the user contacts an admin. The admin sets a temporary password, and the user must choose a new one at the next login.
+
+**Security measures**
+
+| Measure | How |
+|---|---|
+| Password storage | Werkzeug `generate_password_hash` (scrypt, random salt); plain passwords are never stored or logged |
+| Password rule | at least 8 characters, with at least 1 letter and 1 number |
+| Sessions | Flask-Login. The session is regenerated on login. The cookie holds a rotating session token, so a password change, reset or deactivation ends every other session |
+| Cookies | `HttpOnly`, `SameSite=Lax`, `Secure` from `SESSION_COOKIE_SECURE`; remember-me lasts 14 days |
+| CSRF | Flask-WTF on every POST/PUT/DELETE: a hidden field in forms, an `X-CSRFToken` header from JS; logout is POST-only |
+| Brute force | 10 login attempts per minute per IP (Flask-Limiter); the account locks for 15 minutes after 5 failures |
+| Generic errors | "Invalid email or password." for an unknown email, a wrong password, a locked or a deactivated account |
+| Safe redirects | `next` must be a same-site relative path (`//evil.com`, `https://…` and `/\…` fall back to `/`) |
+| Injection / XSS | SQLAlchemy ORM (parameterized), Jinja autoescaping, no `\|safe` on user strings, CSV export neutralises formulas |
+| Headers | `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, and a CSP with per-request nonces that allows only the CDNs already in use |
+| Audit | log-ins, sign-ups, log-outs, role changes, (de)activation, password resets, unlocks, profile/account deletion and recalculations; ids and IPs only |
+
+**Known limitations:** no email verification or self-service reset (no mail server); SQLite and the
+in-memory rate-limit counters suit a single server process, not several instances.
+
+| Log in | Dashboard as a guest |
+|---|---|
+| ![Log in](docs/screenshots/auth/login.png) | ![Guest dashboard](docs/screenshots/auth/dashboard_guest.png) |
+| **Admin · Users** | **403 for a normal user** |
+| ![Admin users](docs/screenshots/auth/admin_users.png) | ![403](docs/screenshots/auth/forbidden_403.png) |

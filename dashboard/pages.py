@@ -24,7 +24,7 @@ from src.utils.config import load_params
 
 from .inference import FEATURED_PATH, MODEL_DIR, MODEL_NAMES, TARGETS, TASKS
 from .service import DISEASE_LABELS, DISEASE_ORDER, DashboardService, aqi_category
-from .storage import clean_profile
+from .storage import DEFAULT_PROFILE, clean_profile
 
 ART = paths.ARTIFACTS
 APP_VERSION = "2.0.0"
@@ -180,13 +180,13 @@ class PageData:
         self._featured()          # dataset rows for the country drawer on the Risk Map
 
     # -- My Risk ---------------------------------------------------------------
-    def disease(self, key: str, loc: str) -> dict:
+    def disease(self, key: str, loc: str, profile: dict | None = None) -> dict:
+        """Deep dive for one disease; ``profile`` is the signed-in user's saved one (or None)."""
         if key not in DISEASE_ORDER:
             raise KeyError(key)
         run, pred, scores = self._run_bits(loc)
-        profile = self.svc.profile
-        adj = scoring.personal_adjustments(profile).get(key, {"points": 0, "raw_points": 0,
-                                                               "capped": False, "reasons": []})
+        adjustments = scoring.personal_adjustments(profile) if profile else {}
+        adj = adjustments.get(key, {"points": 0, "raw_points": 0, "capped": False, "reasons": []})
         final = scoring.apply_adjustment(scores[key], adj["points"])
 
         cache_key = (run.computed_at, loc, key)
@@ -214,7 +214,7 @@ class PageData:
             "overall": self._overall(pred, scores),
             "tabs": [{"key": k, "label": DISEASE_LABELS[k],
                       "score": round(scoring.apply_adjustment(
-                          scores[k], scoring.personal_adjustments(profile).get(k, {"points": 0})["points"])),
+                          scores[k], adjustments.get(k, {"points": 0})["points"])),
                       } for k in DISEASE_ORDER],
             "model_score": round(scores[key]), "adjustment": adj, "score": round(final),
             "level": scoring.band(final), "model_level": scoring.band(scores[key]),
@@ -230,12 +230,12 @@ class PageData:
                           "sources": [r["source"] for r in recent]},
             "disclaimer": advisory.DISCLAIMER,
             "profile": profile,
-            "personal": self._personal(key, loc),
+            "personal": self._personal(key, loc, profile),
         }
 
-    def _personal(self, key: str, loc: str) -> dict:
+    def _personal(self, key: str, loc: str, profile: dict | None) -> dict:
         """This disease's personal evaluation (rules fired, level, actions)."""
-        pa = self.svc.personal_advisory(loc)
+        pa = self.svc.personal_advisory(loc, profile)
         d = next(x for x in pa["diseases"] if x["disease"] == key)
         severe = personal_rules.LEVELS.index(d["personal_level"]) >= personal_rules.LEVELS.index("High")
         return {"personalized": pa["personalized"], **d,
@@ -437,8 +437,10 @@ class PageData:
                          for k in DISEASE_ORDER]}
 
     # -- My Health ---------------------------------------------------------------
-    def profile_preview(self, data: dict, loc: str, lang: str = "en") -> dict:
-        p = clean_profile(data, self.svc.profile)
+    def profile_preview(self, data: dict, loc: str, lang: str = "en",
+                        base: dict | None = None) -> dict:
+        """Preview ``data`` merged over ``base`` (the user's saved profile); nothing is saved."""
+        p = clean_profile({k: v for k, v in data.items() if k != "name"}, base or DEFAULT_PROFILE)
         run, pred, scores = self._run_bits(loc)
         adj = scoring.personal_adjustments(p)
         return {

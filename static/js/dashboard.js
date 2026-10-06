@@ -54,7 +54,7 @@ function renderHero(d) {
   document.getElementById("overall-change").innerHTML =
     changeHtml(o.change_points, o.compare_label, prevTip(d)) + demo;
   document.getElementById("overall-explain").textContent = d.live
-    ? `Based on current weather and air quality in ${d.location.name}. Your profile adjusts the disease scores.`
+    ? `Based on current weather and air quality in ${d.location.name}.${d.profile ? " Your profile adjusts the disease scores." : ""}`
     : `Regional estimate from the latest dataset week (${d.data_date}); live weather is unavailable.`;
   document.getElementById("disclaimer").textContent = d.disclaimer;
   document.getElementById("last-updated").textContent = fmt.time(d.updated_at);
@@ -159,6 +159,7 @@ function renderAdvisories(d) {
 
 /* Personal advisories replace the regional ones once a profile is saved. */
 async function loadPersonal() {
+  if (!USER) return;                                  // guests keep the regional advisories
   let pa;
   try { pa = await apiLoc(`/api/advisory/personal?lang=${Lang.get()}`); } catch (e) { console.error(e); return; }
   if (!pa.personalized) return;                       // keep the regional advisories
@@ -211,6 +212,14 @@ function renderMap(d) {
 }
 
 function renderProfile(p) {
+  const name = USER ? USER.name : "";
+  document.getElementById("greeting").textContent = `${greetingFor()}${name ? ", " + name : ""} 👋`;
+  const strip = document.getElementById("profile-strip");
+  if (!strip) return;                                 // guest: the log-in card is shown instead
+  if (!p) {
+    strip.innerHTML = `<div class="col-span-6 text-[12px] py-[6px]">No profile yet. Add your age, conditions and exposure to get personalized scores and advice.</div>`;
+    return;
+  }
   const items = [
     ["calendar-days", "Age", p.age],
     ["map-pin", "Location", p.location],
@@ -225,7 +234,6 @@ function renderProfile(p) {
       <i data-lucide="${icon}" class="w-[20px] h-[20px]" style="color:${colors[label] || "#1F6FEB"}"></i>
       <div class="leading-tight"><div class="text-[10.5px]">${label}</div><div class="text-[11.5px] font-semibold text-[var(--heading)] mt-[2px]">${esc(v ?? "–")}</div></div>
     </div>`).join("");
-  document.getElementById("greeting").textContent = `${greetingFor()}, ${p.name || "there"} 👋`;
 }
 
 function render(d) {
@@ -245,19 +253,21 @@ function render(d) {
 
 /* ---------------- interactions ---------------- */
 function load(recalc = false) {
-  const btn = document.getElementById("recalc");
-  btn.classList.add("loading");
-  btn.disabled = true;
+  const btn = document.getElementById("recalc");     // signed-in users only
+  btn?.classList.add("loading");
+  if (btn) btn.disabled = true;
   return Page.run(
     () => (recalc ? apiLoc("/api/recalculate", { method: "POST", body: "{}" }) : apiLoc("/api/dashboard")),
     render,
   ).finally(() => {
-    btn.classList.remove("loading");
-    btn.disabled = false;
+    btn?.classList.remove("loading");
+    if (btn) btn.disabled = false;
   });
 }
 
-document.getElementById("recalc").addEventListener("click", () => load(true));
+document.getElementById("recalc")?.addEventListener("click", () => load(true));
+// The user's "data refresh interval" setting reloads the dashboard data.
+if (Page.autoRefreshMinutes) setInterval(() => load(false), Page.autoRefreshMinutes * 60 * 1000);
 
 Components.tabs("trend-tabs", (key) => {
   state.trendKey = key;

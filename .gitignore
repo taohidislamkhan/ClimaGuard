@@ -14,6 +14,7 @@ env/
 # --- Secrets (DVC remote credentials live in .dvc/config.local) ---
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 
@@ -46,3 +47,6 @@ data/cache/risk_history.db
 
 # --- DVC plot renders (dvc plots show) ---
 dvc_plots/
+
+# --- User accounts (serving state: never Git, never DVC) ---
+/instance/

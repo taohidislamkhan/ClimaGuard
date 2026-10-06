@@ -1,0 +1,16 @@
+{# Field with label, inline error and (for passwords) a show/hide toggle. #}
+{% macro field(f, type=None, autocomplete=None, hint=None) -%}
+  <div class="field {% if f.errors %}invalid{% endif %}">
+    <label for="{{ f.id }}">{{ f.label.text }}</label>
+    {% if f.type == 'PasswordField' %}
+      <div class="pw-wrap">
+        {{ f(autocomplete=autocomplete, **({'aria-invalid': 'true', 'aria-describedby': f.id ~ '-err'} if f.errors else {})) }}
+        <button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password"><i data-lucide="eye"></i></button>
+      </div>
+    {% else %}
+      {{ f(autocomplete=autocomplete, **({'aria-invalid': 'true', 'aria-describedby': f.id ~ '-err'} if f.errors else {})) }}
+    {% endif %}
+    {% if hint and not f.errors %}<div class="hint">{{ hint }}</div>{% endif %}
+    {% for e in f.errors %}<div class="err" id="{{ f.id }}-err">{{ e }}</div>{% endfor %}
+  </div>
+{%- endmacro %}

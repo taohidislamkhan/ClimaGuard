@@ -3,10 +3,11 @@
 {% block content %}
 <div class="grid gap-4 mt-2" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);">
   <!-- Profile form -->
-  {% call ui.card("Your profile", "user-round-pen", cls="p-5", sub="Saved on this computer's ClimaGuard server (SQLite, single user). Nothing is stored in the browser.") %}
+  {% call ui.card("Your profile", "user-round-pen", cls="p-5", sub="Saved to your account on the ClimaGuard server. Only you can see it: admins see account details, never this profile.") %}
     <form id="hp-form" class="mt-4" novalidate>
       <div class="grid grid-cols-2 gap-3">
-        <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" maxlength="30" required></div>
+        <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" readonly aria-readonly="true" class="!bg-[var(--card-2)]">
+          <div class="hint">From your account. <a href="/account" class="text-[var(--primary)]">Change it</a></div></div>
         <div class="field"><label for="f-age">Age</label><input id="f-age" name="age" type="number" min="1" max="110" required>
           <div class="hint">Age group: <b id="age-group">–</b></div></div>
         <div class="field col-span-2"><label for="f-location">Home division</label>
@@ -69,7 +70,7 @@
 
       <label class="check mt-4 !text-[12px] leading-snug" id="consent-row">
         <input type="checkbox" name="consent" class="mt-0.5">
-        <span>I agree that ClimaGuard stores my health conditions <b>on this computer only</b> (local SQLite). They are never logged, never sent to an external service, and never used by the ML models. I can delete them at any time.</span>
+        <span>I agree that ClimaGuard stores my health conditions <b>in my account only</b>. Nobody else can see them, not even admins. They are never logged, never sent to an external service, and never used by the ML models. I can delete them at any time.</span>
       </label>
 
       <div class="flex items-center gap-3 mt-5 flex-wrap">

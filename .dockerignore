@@ -11,6 +11,8 @@ env/
 .dvc/tmp/
 .dvc/config.local
 .env
+.env.*
+instance/
 .puku/
 .vscode/
 .idea/

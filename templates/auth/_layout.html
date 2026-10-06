@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}{% endblock %} · ClimaGuard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="auth-shell">
+  <aside class="auth-brand">
+    <div>
+      <a href="/" class="flex items-center gap-3">
+        {% include "components/logo.html" %}
+        <div>
+          <div class="text-[22px] font-semibold leading-tight tracking-tight">ClimaGuard</div>
+          <div class="text-[12px] text-white/75 mt-0.5">Environmental Health Intelligence</div>
+        </div>
+      </a>
+      <h2 class="mt-14 text-[30px] leading-[1.2] font-semibold max-w-[440px]">Know today's climate health risks for your division in Bangladesh.</h2>
+      <p class="mt-4 text-[15px] text-white/75 max-w-[440px]">Machine-learning risk scores from live weather and air quality, with advice that fits your health profile.</p>
+      <ul class="points mt-8 space-y-3 max-w-[440px]">
+        <li><i data-lucide="activity"></i>Respiratory, heat, vector-borne and waterborne risk for all 8 divisions</li>
+        <li><i data-lucide="user-round-check"></i>Personal advisories from transparent, sourced rules</li>
+        <li><i data-lucide="lock-keyhole"></i>Your health data is private: only you can see it, not even admins</li>
+      </ul>
+    </div>
+    <div class="relative z-10 text-[12px] text-white/60">Regional risk is public: <a href="/" class="underline hover:text-white">open the dashboard as a guest</a>.</div>
+    <img src="{{ url_for('static', filename='img/skyline.svg') }}" alt="" class="skyline">
+  </aside>
+
+  <main class="auth-main">
+    <section class="card auth-card">
+      {% block card %}{% endblock %}
+    </section>
+    <p class="mt-5 text-[11.5px] text-[var(--muted)] max-w-[420px] text-center flex items-center gap-1.5 justify-center">
+      <i data-lucide="info" class="w-3.5 h-3.5 shrink-0"></i>This is an environmental risk estimate, not a medical diagnosis.
+    </p>
+  </main>
+</div>
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+</body>
+</html>

@@ -6,9 +6,11 @@
 {% block content %}
 <!-- Row 1: hero -->
 <section class="relative mt-[16px]">
+  {% if user %}
   <button id="recalc" class="btn-primary absolute -top-[16px] right-0 z-20">
     <i data-lucide="refresh-cw"></i> Recalculate Risk
   </button>
+  {% endif %}
   <div class="card hero relative h-[205px] flex items-stretch">
     <img src="{{ url_for('static', filename='img/skyline.svg') }}" class="skyline" alt="">
     <div class="absolute left-[18px] top-[18px] w-[34px] h-[26px] rounded-md bg-[var(--chip-bg)] opacity-70"></div>
@@ -132,7 +134,18 @@
   </div>
 </section>
 
-<!-- Row 5: profile -->
+<!-- Row 5: profile (signed in) or the log-in call to action (guest) -->
+{% if not user %}
+<section class="card mt-[12px] px-[16px] py-[10px] flex items-center gap-4" id="guest-cta">
+  <span class="w-9 h-9 rounded-full grid place-items-center shrink-0 bg-[var(--chip-bg)]"><i data-lucide="user-round-check" class="w-5 h-5 text-[var(--chip-fg)]"></i></span>
+  <div class="flex-1 min-w-0">
+    <div class="card-title">Log in for personalized advice</div>
+    <div class="text-[12px] mt-0.5">You are seeing the regional view. With a free account, ClimaGuard adjusts the advice to your age, health conditions and daily exposure. Only you can see your health profile.</div>
+  </div>
+  <a href="{{ url_for('auth.login', next='/') }}" class="btn-ghost !h-[32px]">Log in</a>
+  <a href="{{ url_for('auth.signup') }}" class="btn-primary">Sign up free</a>
+</section>
+{% else %}
 <section class="card mt-[12px] px-[14px] pt-[7px] pb-[6px]">
   <h3 class="card-title flex items-center gap-2"><i data-lucide="user-round-check" class="w-4 h-4 text-[var(--primary)]"></i>Your Health Profile</h3>
   <div class="flex items-center justify-between mt-[4px]">
@@ -140,6 +153,7 @@
     <a href="/my-health" data-keep-loc id="open-profile" class="btn-secondary !h-[26px] !text-[11px]">Update Profile <i data-lucide="arrow-right"></i></a>
   </div>
 </section>
+{% endif %}
 
 {% endblock %}
 {% block scripts %}

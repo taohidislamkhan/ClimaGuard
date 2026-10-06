@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<div class="flex items-center gap-3 mt-2">
+  <button type="button" class="btn-primary" id="m-recalc"
+          data-confirm="Re-run the models for all eight divisions now? This fetches live weather for each division."><i data-lucide="refresh-cw"></i> Recalculate all divisions now</button>
+  <button type="button" class="btn-ghost !h-[32px]" id="m-clear"
+          data-confirm="Clear the cached weather and model results? The next page load fetches fresh data."><i data-lucide="eraser"></i> Clear weather cache</button>
+  <span class="text-[12px]" id="m-status" role="status"></span>
+  <span class="text-[12px] ml-auto flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5"></i>Retraining is not possible from the web: run <code>dvc repro</code> on the server.</span>
+</div>
+
+<div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);">
+  {% call ui.card("Overall risk classifier", "chart-pie", cls="p-5", sub="Test split (reports/metrics/classifier_metrics.json). Winner: " ~ (model_names.get("overall") or "–") ~ ".") %}
+    {% if classifier %}
+    <table class="tbl mt-3"><thead><tr><th>Model</th><th>Accuracy</th><th>Macro F1</th><th>ROC AUC</th></tr></thead><tbody>
+      {% for name, m in classifier.items() %}
+        <tr class="{% if name == 'winner' %}hi{% endif %}"><td>{{ name }}</td><td>{{ "%.3f"|format(m.accuracy) }}</td><td>{{ "%.3f"|format(m.macro_f1) }}</td><td>{{ "%.3f"|format(m.roc_auc) }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% else %}<div class="empty-state">No classifier metrics. Run <code>dvc repro</code>.</div>{% endif %}
+  {% endcall %}
+
+  {% call ui.card("Disease regressors (winners)", "chart-column", cls="p-5", sub="Test split (reports/metrics/regressor_metrics.json).") %}
+    {% if regressors %}
+    <table class="tbl mt-3"><thead><tr><th>Disease</th><th>Model</th><th>R²</th><th>MAE</th><th>RMSE</th></tr></thead><tbody>
+      {% for task, ms in regressors.items() %}
+        {% set w = ms.winner %}
+        <tr><td class="capitalize">{{ task }}</td><td>{{ model_names.get(task) or "–" }}</td>
+          <td><span class="badge lvl-{{ 'Low' if w.r2 >= 0.5 else ('Moderate' if w.r2 >= 0.2 else 'High') }}">{{ "%.3f"|format(w.r2) }}</span></td>
+          <td>{{ "%.2f"|format(w.mae) }}</td><td>{{ "%.2f"|format(w.rmse) }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% else %}<div class="empty-state">No regressor metrics. Run <code>dvc repro</code>.</div>{% endif %}
+  {% endcall %}
+</div>
+
+{% call ui.card("Drift report", "activity", cls="p-5 mt-4", sub="reports/drift/drift_report.json (DVC drift stage): train split as reference, test split as current.") %}
+  {% if drift %}
+  <div class="grid grid-cols-4 gap-3 mt-4">
+    <div class="stat-tile"><div class="stat-label !mt-0">Retrain recommended</div>
+      <div class="mt-1"><span class="badge lvl-{{ 'High' if drift.retrain_recommended else 'Low' }}">{{ "Yes" if drift.retrain_recommended else "No" }}</span></div></div>
+    <div class="stat-tile"><div class="stat-label !mt-0">Features drifted</div><div class="stat-value">{{ drift.data.n_drifted }}/{{ drift.data.n_features }}</div></div>
+    <div class="stat-tile"><div class="stat-label !mt-0">Max PSI</div><div class="stat-value">{{ drift.data.max_psi }}</div></div>
+    <div class="stat-tile"><div class="stat-label !mt-0">Concept-drift windows flagged</div><div class="stat-value">{{ drift.concept.n_flagged }}/{{ drift.concept.n_windows }}</div></div>
+  </div>
+  <div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);">
+    <div>
+      <div class="text-[12px] font-semibold text-[var(--heading)]">Highest PSI features</div>
+      <table class="tbl mt-1"><thead><tr><th>Feature</th><th>PSI</th><th>KS p-value</th></tr></thead><tbody>
+        {% for f in drift.data.worst %}<tr><td class="mono text-[12px]">{{ f.feature }}</td><td>{{ f.psi }}</td><td>{{ f.ks_pvalue }}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    <div class="text-[13px]">
+      <div class="text-[12px] font-semibold text-[var(--heading)]">Reasons</div>
+      {% if drift.reasons %}<ul class="list-disc pl-5 mt-1">{% for r in drift.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% else %}<p class="mt-1">None: no threshold was crossed.</p>{% endif %}
+      <div class="text-[12px] font-semibold text-[var(--heading)] mt-4">Response</div>
+      <p class="mt-1">{{ drift.response }}</p>
+    </div>
+  </div>
+  {% else %}<div class="empty-state">No drift report. Run the <code>drift</code> stage.</div>{% endif %}
+{% endcall %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

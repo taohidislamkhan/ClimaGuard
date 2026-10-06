@@ -1,0 +1,8 @@
+{% extends "auth/_layout.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block card %}
+  <div class="text-[13px] font-semibold text-[var(--muted)]">Error {{ code }}</div>
+  <h1 class="text-[22px] font-semibold text-[var(--heading)] mt-1">{{ title }}</h1>
+  <p class="text-[13.5px] mt-2">{{ message }}</p>
+  <a href="/" class="btn-primary mt-6"><i data-lucide="house"></i> Back to the dashboard</a>
+{% endblock %}

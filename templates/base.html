@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}{{ page_title }} · ClimaGuard{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,8 +13,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   {% block head %}{% endblock %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
-  <script>
-    window.APP = {{ {"settings": settings, "divisions": divisions, "page": active} | tojson }};
+  <script nonce="{{ csp_nonce() }}">
+    window.APP = {{ {"settings": settings, "divisions": divisions, "page": active, "user": user} | tojson }};
   </script>
 </head>
 <body class="min-h-screen">
@@ -21,18 +22,7 @@
   <!-- Sidebar (collapses to icons below 1280px) -->
   <aside class="sidebar fixed inset-y-0 left-0 flex flex-col z-40">
     <a href="/" data-keep-loc class="brand flex items-center gap-2.5 px-4 pt-4 pb-4">
-      <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true" class="shrink-0">
-        <defs>
-          <linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#3FB6E8"/><stop offset="1" stop-color="#1673C8"/>
-          </linearGradient>
-        </defs>
-        <circle cx="21" cy="22" r="15" fill="url(#lg1)"/>
-        <path d="M9 21c4-1 6 2 9 1s4-5 8-4 3 5 7 5" stroke="#8FE0B8" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-        <path d="M27 14a7 7 0 0 1 13 3 5 5 0 0 1 1 10H27a5 5 0 0 1 0-10z" fill="#E8F6FF"/>
-        <path d="M20 38c0-4 2-6 4-6s4 2 4 6" fill="#4CC38A"/>
-        <circle cx="24" cy="28.5" r="2.4" fill="#4CC38A"/>
-      </svg>
+      {% include "components/logo.html" %}
       <div class="nav-text">
         <div class="text-[18.5px] font-semibold leading-tight tracking-tight">ClimaGuard</div>
         <div class="text-[10.5px] text-white/75 mt-0.5 whitespace-nowrap">Environmental Health Intelligence</div>
@@ -44,12 +34,25 @@
       {% for g in groups %}
         {% if not loop.first %}<div class="nav-divider"></div>{% endif %}
         {% for key in g %}
-          <a href="{{ pages[key][0] }}" data-keep-loc title="{{ pages[key][1] }}"
-             class="nav-item {% if active == key %}active{% endif %}" {% if active == key %}aria-current="page"{% endif %}>
-            <i data-lucide="{{ icons[key] }}"></i><span class="nav-text">{{ pages[key][1] }}</span>
+          {% set locked = key in personal_pages and not user %}
+          <a href="{{ url_for('auth.login', next=pages[key][0]) if locked else pages[key][0] }}" {% if not locked %}data-keep-loc{% endif %}
+             title="{{ pages[key][1] }}{% if locked %} (log in){% endif %}"
+             class="nav-item {% if active == key %}active{% endif %} {% if locked %}nav-locked{% endif %}" {% if active == key %}aria-current="page"{% endif %}>
+            <i data-lucide="{{ icons[key] }}"></i><span class="nav-text flex-1">{{ pages[key][1] }}</span>
+            {% if locked %}<i data-lucide="lock" class="nav-lock nav-text"></i>{% endif %}
           </a>
         {% endfor %}
       {% endfor %}
+      {% if user and user.role == 'admin' %}
+        {% set aicons = {'admin_overview':'layout-dashboard','admin_users':'users','admin_model':'cpu','admin_rules':'list-checks','admin_audit':'scroll-text'} %}
+        <div class="nav-divider"></div>
+        <div class="nav-section nav-text"><i data-lucide="shield"></i> Admin</div>
+        {% for key, (path, label, _) in admin_pages.items() %}
+          <a href="{{ path }}" title="Admin · {{ label }}" class="nav-item nav-sub {% if active == key %}active{% endif %}" {% if active == key %}aria-current="page"{% endif %}>
+            <i data-lucide="{{ aicons[key] }}"></i><span class="nav-text">{{ label }}</span>
+          </a>
+        {% endfor %}
+      {% endif %}
     </nav>
     <div class="px-5 pb-5 nav-footer">
       <div class="nav-divider !mx-0 !mb-4"></div>
@@ -90,13 +93,46 @@
           <i data-lucide="bell" class="w-[21px] h-[21px]"></i>
           <span id="bell-dot" class="hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#E5484D] ring-2 ring-[var(--bg)]"></span>
         </button>
-        <a href="/my-health" data-keep-loc class="flex items-center gap-2.5" id="avatar-btn">
-          <span class="w-[33px] h-[33px] rounded-full bg-[#0E4C7A] text-white grid place-items-center font-semibold text-[14px]" id="avatar-initial">·</span>
-          <span class="text-[13px] font-semibold text-[var(--heading)]" id="avatar-name">—</span>
-          <i data-lucide="chevron-down" class="w-4 h-4"></i>
-        </a>
+        {% if user %}
+        <div class="relative" id="avatar-menu">
+          <button type="button" class="flex items-center gap-2.5" id="avatar-btn" aria-haspopup="menu" aria-expanded="false">
+            <span class="w-[33px] h-[33px] rounded-full bg-[#0E4C7A] text-white grid place-items-center font-semibold text-[14px]" id="avatar-initial">{{ user.name[:1] | upper }}</span>
+            <span class="text-[13px] font-semibold text-[var(--heading)]" id="avatar-name">{{ user.name }}</span>
+            {% if user.role == 'admin' %}<span class="role-pill">Admin</span>{% endif %}
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </button>
+          <div class="menu hidden" id="avatar-dropdown" role="menu">
+            <div class="px-3 pt-2.5 pb-2 border-b border-[color:var(--border-soft)]">
+              <div class="text-[13px] font-semibold text-[var(--heading)] truncate">{{ user.name }}</div>
+              <div class="mt-1"><span class="role-pill {% if user.role != 'admin' %}role-user{% endif %}">{{ user.role | capitalize }}</span></div>
+            </div>
+            <a href="{{ url_for('auth.account') }}" role="menuitem"><i data-lucide="user-round-cog"></i> Account</a>
+            <a href="/settings" data-keep-loc role="menuitem"><i data-lucide="settings"></i> Settings</a>
+            <form method="post" action="{{ url_for('auth.logout') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" role="menuitem"><i data-lucide="log-out"></i> Log out</button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div class="flex items-center gap-2">
+          <a href="{{ url_for('auth.login', next=request.full_path.rstrip('?')) }}" class="btn-ghost">Log in</a>
+          <a href="{{ url_for('auth.signup') }}" class="btn-secondary">Sign up</a>
+        </div>
+        {% endif %}
       </div>
     </header>
+
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in msgs %}
+        {% if cat == 'welcome' %}
+        <div class="flash flash-info" role="status"><i data-lucide="party-popper"></i>
+          <span><b>Welcome to ClimaGuard!</b> Complete your profile below to get personalized advice.</span></div>
+        {% else %}
+        <div class="flash flash-{{ 'ok' if cat == 'ok' else 'info' }}" role="status"><i data-lucide="circle-check"></i><span>{{ msg }}</span></div>
+        {% endif %}
+      {% endfor %}
+    {% endwith %}
 
     <div id="fallback-banner" class="hidden banner-fallback rounded-lg px-4 py-2 mb-2 text-[12px] flex items-center gap-2">
       <i data-lucide="cloud-off" class="w-4 h-4"></i>
@@ -110,6 +146,6 @@
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/components.js') }}"></script>
 {% block scripts %}{% endblock %}
-<script>lucide.createIcons();</script>
+<script nonce="{{ csp_nonce() }}">lucide.createIcons();</script>
 </body>
 </html>

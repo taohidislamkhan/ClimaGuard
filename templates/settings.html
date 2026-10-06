@@ -2,7 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% block content %}
 <div class="grid gap-4 mt-2" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);">
-  {% call ui.card("Preferences", "sliders-horizontal", cls="p-5", sub="Changes save immediately to the local ClimaGuard server (SQLite). Nothing is stored in the browser.",
+  {% call ui.card("Preferences", "sliders-horizontal", cls="p-5", sub="Changes save immediately to your account. Nothing is stored in the browser.",
                   chip_html='<span class="text-[12px]" id="st-status" role="status"></span>') %}
     <div class="divide-y divide-[color:var(--border-soft)] mt-2">
       <div class="flex items-center justify-between py-4 gap-4">
@@ -23,7 +23,7 @@
       </div>
       <div class="flex items-center justify-between py-4 gap-4">
         <div><div class="text-[13px] font-semibold text-[var(--heading)]">Data refresh interval</div>
-             <div class="text-[11.5px]">How long live weather and model results are cached before a background refresh.</div></div>
+             <div class="text-[11.5px]">How often your open dashboard reloads its data. The server refreshes live weather every 30 minutes for everyone.</div></div>
         <div class="seg" data-setting="refresh_minutes"><button data-value="15">15 min</button><button data-value="30">30 min</button><button data-value="60">60 min</button></div>
       </div>
       <div class="py-4">

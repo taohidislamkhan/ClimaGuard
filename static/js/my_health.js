@@ -1,4 +1,4 @@
-/* My Health: profile form (saved to SQLite via /api/profile) + live adjustment preview. */
+/* My Health: profile form (saved to the signed-in account via /api/profile) + live adjustment preview. */
 const form = document.getElementById("hp-form");
 const F = form.elements;   // F.name would be the <form> name attribute, not the input
 const status = document.getElementById("hp-status");

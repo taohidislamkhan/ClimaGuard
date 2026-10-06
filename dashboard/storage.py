@@ -1,23 +1,22 @@
-"""Single-user profile and settings, persisted in SQLite.
+"""Per-user profile and settings (``profiles`` / ``settings`` in ``instance/app.db``).
 
-Both live in the same database file as ``risk_history`` as one JSON
-document each (tables ``profile`` and ``settings``, row id 1). Unknown keys
-are dropped and values are validated before they are stored.
+Each user has at most one profile and one settings row, stored as a validated
+JSON document. Unknown keys are dropped and values are validated before they
+are stored. Every read and write takes the *current user*: there is no way to
+pass another user's id in.
 
-Privacy: the profile stays in this local SQLite file. It is never logged and
-never sent to an external API (Open-Meteo only receives division
-coordinates). Saving a health condition requires ``consent``; deleting the
-profile removes the row (``secure_delete`` overwrites the freed pages).
+Privacy: the profile is never logged, never shown to admins and never sent to
+an external API (Open-Meteo only receives division coordinates). Saving a
+health condition requires ``consent``; deleting the profile removes the row
+(``secure_delete`` overwrites the freed pages).
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
-import threading
-from pathlib import Path
 
-from .history import DB_PATH
+from .extensions import db
+from .models import Profile, UserSettings, utcnow
 
 DIVISION_NAMES = ["Dhaka", "Chattogram", "Rajshahi", "Khulna", "Sylhet",
                   "Barisal", "Rangpur", "Mymensingh"]
@@ -124,57 +123,65 @@ def clean_settings(data: dict, base: dict | None = None) -> dict:
     return s
 
 
-class AppStore:
-    def __init__(self, path: Path = DB_PATH) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(path, check_same_thread=False)
-        self.conn.execute("PRAGMA secure_delete = ON")     # deleted rows are overwritten on disk
-        self._lock = threading.Lock()
-        with self._lock:
-            for table in ("profile", "settings"):
-                self.conn.execute(f"CREATE TABLE IF NOT EXISTS {table} "
-                                  "(id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL)")
-            self.conn.commit()
+# -- per-user persistence (always scoped to the given user) --------------------
+def has_profile(user) -> bool:
+    return user is not None and user.profile is not None
 
-    def _get(self, table: str, default: dict, cleaner) -> dict:
-        with self._lock:
-            row = self.conn.execute(f"SELECT data FROM {table} WHERE id = 1").fetchone()
-        if not row:
-            return dict(default) if table == "profile" else json.loads(json.dumps(default))
-        try:
-            return cleaner(json.loads(row[0]))
-        except (ValidationError, json.JSONDecodeError):
-            return json.loads(json.dumps(default))
 
-    def _put(self, table: str, data: dict) -> None:
-        with self._lock:
-            self.conn.execute(f"INSERT OR REPLACE INTO {table} (id, data) VALUES (1, ?)",
-                              (json.dumps(data),))
-            self.conn.commit()
+def profile_for(user) -> dict | None:
+    """The user's saved profile (name from the account), or None when not saved."""
+    if not has_profile(user):
+        return None
+    try:
+        p = clean_profile(user.profile.data)
+    except ValidationError:
+        p = dict(DEFAULT_PROFILE)
+    p["name"] = user.name
+    return p
 
-    def profile(self) -> dict:
-        return self._get("profile", DEFAULT_PROFILE, clean_profile)
 
-    def has_profile(self) -> bool:
-        with self._lock:
-            return self.conn.execute("SELECT 1 FROM profile WHERE id = 1").fetchone() is not None
+def profile_or_default(user) -> dict:
+    return profile_for(user) or {**DEFAULT_PROFILE, "name": user.name if user else "Guest"}
 
-    def save_profile(self, data: dict) -> dict:
-        p = clean_profile(data, self.profile())
-        if not p["consent"] and any(p[k] for k in CONDITIONS):
-            raise ValidationError("Tick the consent box before saving a health condition")
-        self._put("profile", p)
-        return p
 
-    def delete_profile(self) -> None:
-        with self._lock:
-            self.conn.execute("DELETE FROM profile WHERE id = 1")
-            self.conn.commit()
+def save_profile(user, data: dict) -> dict:
+    data = {k: v for k, v in data.items() if k != "name"}   # the name lives on the account
+    p = clean_profile(data, profile_or_default(user))
+    if not p["consent"] and any(p[k] for k in CONDITIONS):
+        raise ValidationError("Tick the consent box before saving a health condition")
+    p["name"] = user.name
+    row = user.profile or Profile(user_id=user.id, data={})
+    if p["consent"] and not row.health_consent:
+        row.consent_at = utcnow()
+    row.health_consent = p["consent"]
+    if not p["consent"]:
+        row.consent_at = None
+    row.data = p
+    db.session.add(row)
+    db.session.commit()
+    return p
 
-    def settings(self) -> dict:
-        return self._get("settings", DEFAULT_SETTINGS, clean_settings)
 
-    def save_settings(self, data: dict) -> dict:
-        s = clean_settings(data, self.settings())
-        self._put("settings", s)
-        return s
+def delete_profile(user) -> None:
+    if user.profile is not None:
+        db.session.delete(user.profile)
+        db.session.commit()
+        db.session.refresh(user)
+
+
+def settings_for(user) -> dict:
+    if user is None or user.settings is None:
+        return json.loads(json.dumps(DEFAULT_SETTINGS))
+    try:
+        return clean_settings(user.settings.data)
+    except ValidationError:
+        return json.loads(json.dumps(DEFAULT_SETTINGS))
+
+
+def save_settings(user, data: dict) -> dict:
+    s = clean_settings(data, settings_for(user))
+    row = user.settings or UserSettings(user_id=user.id, data={})
+    row.data = s
+    db.session.add(row)
+    db.session.commit()
+    return s

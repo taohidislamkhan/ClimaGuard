@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+{% call ui.card("Users", "users", cls="p-5 mt-2", sub="Name, email, role and status only. Health profiles are private to each user and never shown here.") %}
+  <div class="flex items-center gap-3 mt-4">
+    <div class="field w-[320px]"><input id="u-search" type="search" placeholder="Search name or email" aria-label="Search users"></div>
+    <span class="text-[12px]" id="u-count"></span>
+    <span class="text-[12px] ml-auto" id="u-status" role="status"></span>
+  </div>
+  <table class="tbl tbl-admin mt-3">
+    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Last login</th><th class="text-right">Actions</th></tr></thead>
+    <tbody id="u-rows"><tr><td colspan="7"><div class="skeleton-block h-[120px]"></div></td></tr></tbody>
+  </table>
+  <div class="pager flex items-center justify-end gap-2 mt-3">
+    <button type="button" class="btn-ghost" id="u-prev"><i data-lucide="chevron-left"></i> Previous</button>
+    <span class="text-[12px]" id="u-page">–</span>
+    <button type="button" class="btn-ghost" id="u-next">Next <i data-lucide="chevron-right"></i></button>
+  </div>
+{% endcall %}
+
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

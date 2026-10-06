@@ -13,7 +13,7 @@ import pytest
 
 from dashboard import personal_rules as pr
 from dashboard import weather_client
-from dashboard.storage import DEFAULT_PROFILE
+from dashboard.storage import DEFAULT_PROFILE, clean_profile
 from dashboard.weather_client import fetch_forecast as real_fetch_forecast
 
 NOW = datetime(2026, 10, 2, 8, 0)
@@ -233,13 +233,13 @@ def test_condition_needs_consent(client):
 
 
 # -- privacy --------------------------------------------------------------------------
-def test_delete_endpoint_wipes_the_row(client, svc, tmp_path):
+def test_delete_endpoint_wipes_the_row(client, db_profile, tmp_path):
     client.post("/api/profile", json={"name": "Karim", "diabetes": True, "consent": True})
-    assert svc.app.has_profile()
+    assert db_profile() is not None
     r = client.delete("/api/profile")
     assert r.status_code == 200 and r.get_json()["deleted"] is True
-    assert not svc.app.has_profile()
-    assert sqlite3.connect(tmp_path / "h.db").execute("SELECT COUNT(*) FROM profile").fetchone()[0] == 0
+    assert db_profile() is None
+    assert sqlite3.connect(tmp_path / "app.db").execute("SELECT COUNT(*) FROM profiles").fetchone()[0] == 0
     assert client.get("/api/advisory/personal").get_json()["personalized"] is False
     assert client.get("/api/profile").get_json()["saved"] is False
 
@@ -273,9 +273,9 @@ def test_profile_never_sent_to_external_apis(svc, monkeypatch):
 
     monkeypatch.setattr(weather_client, "_get_json", fake_get_json)
     monkeypatch.setattr(weather_client, "fetch_forecast", real_fetch_forecast)
-    svc.app.save_profile({"name": "Nasrin", "asthma": True, "pregnancy": True, "consent": True,
-                          "water_source": "tap"})
-    out = svc.personal_advisory("Dhaka")
+    p = clean_profile({"name": "Nasrin", "asthma": True, "pregnancy": True, "consent": True,
+                       "water_source": "tap"})
+    out = svc.personal_advisory("Dhaka", p)
     assert out["personalized"] and sent
     for url, params in sent:
         assert set(params) <= {"latitude", "longitude", "timezone", "forecast_days", "daily", "hourly"}

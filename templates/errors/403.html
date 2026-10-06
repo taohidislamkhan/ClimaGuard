@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card p-10 mt-6 max-w-[620px] mx-auto text-center">
+  <div class="w-14 h-14 rounded-full grid place-items-center mx-auto" style="background: var(--high-bg)">
+    <i data-lucide="shield-x" class="w-7 h-7 text-[var(--high)]"></i>
+  </div>
+  <div class="text-[13px] font-semibold text-[var(--muted)] mt-5">Error 403</div>
+  <h2 class="text-[22px] font-semibold text-[var(--heading)] mt-1">You don't have access to this page</h2>
+  <p class="text-[13.5px] mt-2 max-w-[440px] mx-auto">This area is for administrators. If you need access, ask an admin to change your role.</p>
+  <div class="flex justify-center gap-3 mt-6">
+    <a href="/" data-keep-loc class="btn-primary"><i data-lucide="house"></i> Back to the dashboard</a>
+    <a href="/account" class="btn-ghost !h-[32px]">Your account</a>
+  </div>
+</section>
+{% endblock %}

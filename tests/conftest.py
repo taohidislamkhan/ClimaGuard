@@ -1,9 +1,11 @@
+import re
 import sys
 import warnings
 from pathlib import Path
 
 import numpy as np
 import pytest
+from flask.testing import FlaskClient
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -19,7 +21,6 @@ def store():
 from dashboard import service as service_mod  # noqa: E402
 from dashboard import weather_client  # noqa: E402
 from dashboard.history import History  # noqa: E402
-from dashboard.storage import AppStore  # noqa: E402
 from dashboard.weather_client import Climatology, DIVISIONS, LiveLocation  # noqa: E402
 
 
@@ -56,15 +57,98 @@ def fake_forecast(name, heatwave_tmax):
 
 @pytest.fixture()
 def svc(store, tmp_path, monkeypatch):
-    s = service_mod.DashboardService(history=History(tmp_path / "h.db"),
-                                     app_store=AppStore(tmp_path / "h.db"), store=store)
+    s = service_mod.DashboardService(history=History(tmp_path / "h.db"), store=store)
     s._clim = fake_climatology(store)
     monkeypatch.setattr(weather_client, "fetch_live", fake_live(store, s._clim))
     monkeypatch.setattr(weather_client, "fetch_forecast", fake_forecast)
     return s
 
 
+# -- accounts -------------------------------------------------------------------
+PASSWORD = "secret123"
+_META = re.compile(r'<meta name="csrf-token" content="([^"]+)"')
+
+
+class CSRFClient(FlaskClient):
+    """Test client that behaves like the browser: every POST/PUT/DELETE carries
+    the CSRF token from the page's <meta> tag (set ``csrf = False`` to omit it)."""
+    csrf = True
+
+    def token(self) -> str:
+        html = super().open("/how-it-works", method="GET", follow_redirects=True).get_data(as_text=True)
+        return _META.search(html).group(1)
+
+    def open(self, *args, **kwargs):
+        method = (kwargs.get("method") or "GET").upper()
+        if self.csrf and method not in ("GET", "HEAD", "OPTIONS"):
+            headers = dict(kwargs.pop("headers", None) or {})
+            headers.setdefault("X-CSRFToken", self.token())
+            kwargs["headers"] = headers
+        return super().open(*args, **kwargs)
+
+    def login(self, email: str, password: str = PASSWORD, **extra):
+        return self.post("/login", data={"email": email, "password": password, **extra})
+
+
 @pytest.fixture()
-def client(svc):
+def app(svc, tmp_path):
     from app import create_app
-    return create_app(svc).test_client()
+    application = create_app(svc, config={
+        "TESTING": True, "SECRET_KEY": "test-only-key",
+        "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'app.db'}",
+        "RATELIMIT_ENABLED": False,
+    })
+    application.test_client_class = CSRFClient
+    return application
+
+
+@pytest.fixture()
+def make_user(app):
+    """make_user("a@x.com", role="admin") -> user id."""
+    from dashboard.auth import hash_password
+    from dashboard.extensions import db
+    from dashboard.models import User
+
+    def make(email, name=None, role="user", password=PASSWORD, **fields):
+        with app.app_context():
+            u = User(name=name or email.split("@")[0].title(), email=email,
+                     password_hash=hash_password(password), role=role, **fields)
+            db.session.add(u)
+            db.session.commit()
+            return u.id
+    return make
+
+
+@pytest.fixture()
+def guest(app):
+    return app.test_client()
+
+
+@pytest.fixture()
+def client(app, make_user):
+    """Signed-in normal user (the old single-user tests run as this user)."""
+    make_user("user@example.com", name="Tazim")
+    c = app.test_client()
+    assert c.login("user@example.com").status_code == 302
+    return c
+
+
+@pytest.fixture()
+def admin_client(app, make_user):
+    make_user("admin@example.com", name="Admin", role="admin")
+    c = app.test_client()
+    assert c.login("admin@example.com").status_code == 302
+    return c
+
+
+@pytest.fixture()
+def db_profile(app):
+    """Read a user's stored profile straight from the database (None if not saved)."""
+    from dashboard.models import Profile, User
+
+    def read(email="user@example.com"):
+        with app.app_context():
+            u = User.query.filter_by(email=email).one()
+            row = Profile.query.filter_by(user_id=u.id).first()
+            return None if row is None else dict(row.data)
+    return read

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+{% call ui.card("Audit log", "scroll-text", cls="p-5 mt-2", sub="Logins, sign-ups, role and status changes, password resets, deletions and recalculations. Passwords and health data are never logged.") %}
+  <form class="flex flex-wrap items-end gap-3 mt-4" id="a-filters">
+    <div class="field w-[190px]"><label for="a-action">Action</label>
+      <select id="a-action" name="action"><option value="">All actions</option>{% for a in actions %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select></div>
+    <div class="field w-[220px]"><label for="a-user">User (email, name or target)</label><input id="a-user" name="user" type="search"></div>
+    <div class="field w-[150px]"><label for="a-from">From</label><input id="a-from" name="from" type="date"></div>
+    <div class="field w-[150px]"><label for="a-to">To</label><input id="a-to" name="to" type="date"></div>
+    <button type="submit" class="btn-secondary !h-[34px]"><i data-lucide="filter"></i> Filter</button>
+    <a href="/api/admin/audit.csv" id="a-csv" class="btn-ghost !h-[34px] ml-auto"><i data-lucide="download"></i> Export CSV</a>
+  </form>
+  <table class="tbl tbl-admin mt-4">
+    <thead><tr><th>Time (UTC)</th><th>Action</th><th>Actor</th><th>Target</th><th>IP</th></tr></thead>
+    <tbody id="a-rows"><tr><td colspan="5"><div class="skeleton-block h-[120px]"></div></td></tr></tbody>
+  </table>
+  <div class="pager flex items-center justify-end gap-2 mt-3">
+    <span class="text-[12px] mr-auto" id="a-count"></span>
+    <button type="button" class="btn-ghost" id="a-prev"><i data-lucide="chevron-left"></i> Previous</button>
+    <span class="text-[12px]" id="a-page">–</span>
+    <button type="button" class="btn-ghost" id="a-next">Next <i data-lucide="chevron-right"></i></button>
+  </div>
+{% endcall %}
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

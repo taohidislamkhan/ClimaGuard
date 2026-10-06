@@ -13,6 +13,9 @@ const Lang = {
 };
 
 const SETTINGS = (window.APP && window.APP.settings) || { units: "C", theme: "light", default_location: "Dhaka" };
+/** Signed-in user ({name, role}) or null for guests. */
+const USER = (window.APP && window.APP.user) || null;
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
 
 /** Read a CSS custom property (theme-aware colours for canvas charts). */
 function cssVar(name) {
@@ -73,7 +76,10 @@ function greetingFor(date = new Date()) {
 }
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const method = (opts.method || "GET").toUpperCase();
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers["X-CSRFToken"] = CSRF;   // Flask-WTF checks it
+  const res = await fetch(path, { ...opts, headers, credentials: "same-origin" });
   let body = null;
   try { body = await res.json(); } catch (_) { /* non-JSON */ }
   if (!res.ok) {
@@ -107,16 +113,17 @@ function fillHeader(d) {
     document.getElementById("sys-status").textContent = "Offline data";
     document.getElementById("sys-dot").style.background = "#F5A524";
   }
-  if (d.profile) setProfileHeader(d.profile);
   if (d.diseases && SETTINGS.notifications?.any_high) {
     document.getElementById("bell-dot").classList.toggle("hidden", !d.diseases.some((x) => x.level === "High"));
   }
 }
 
+/** Header avatar shows the account name (the server renders it; kept for live renames). */
 function setProfileHeader(p) {
-  const name = p.name || "Guest";
-  document.getElementById("avatar-name").textContent = name;
-  document.getElementById("avatar-initial").textContent = name[0].toUpperCase();
+  const el = document.getElementById("avatar-name");
+  if (!el || !p?.name) return;
+  el.textContent = p.name;
+  document.getElementById("avatar-initial").textContent = p.name[0].toUpperCase();
 }
 
 /* ---------------- page states: skeleton / error / fallback banner ---------------- */
@@ -178,7 +185,15 @@ const Page = {
   }
   document.querySelectorAll("a[data-keep-loc]").forEach((a) => { a.href = Loc.link(a.getAttribute("href")); });
   document.getElementById("hdr-date").textContent = fmt.date(new Date().toISOString());
-  api("/api/profile").then(setProfileHeader).catch(() => {});
+  const btn = document.getElementById("avatar-btn");
+  const menu = document.getElementById("avatar-dropdown");
+  if (btn && menu) {
+    const toggle = (open) => { menu.classList.toggle("hidden", !open); btn.setAttribute("aria-expanded", String(open)); };
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); toggle(menu.classList.contains("hidden")); });
+    document.addEventListener("click", (ev) => { if (!menu.contains(ev.target)) toggle(false); });
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") toggle(false); });
+  }
+  if (USER && SETTINGS.refresh_minutes) Page.autoRefreshMinutes = SETTINGS.refresh_minutes;
 })();
 
 /* Pages that only need the header use this. */

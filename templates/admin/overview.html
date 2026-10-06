@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+<section class="grid grid-cols-4 gap-3 mt-2">
+  {% for key, label, icon in [("total", "Total users", "users"), ("active_7d", "Active in the last 7 days", "activity"),
+                              ("new_7d", "New sign-ups this week", "user-round-plus"), ("locked", "Locked accounts", "lock")] %}
+  <div class="card p-4 flex items-center gap-3">
+    <span class="w-10 h-10 rounded-lg grid place-items-center shrink-0 {% if key == 'locked' and stats[key] %}bg-[var(--high-bg)]{% else %}bg-[var(--chip-bg)]{% endif %}">
+      <i data-lucide="{{ icon }}" class="w-5 h-5 {% if key == 'locked' and stats[key] %}text-[var(--high)]{% else %}text-[var(--chip-fg)]{% endif %}"></i></span>
+    <div><div class="stat-value !mt-0" data-stat="{{ key }}">{{ stats[key] }}</div><div class="stat-label">{{ label }}</div></div>
+  </div>
+  {% endfor %}
+</section>
+
+<div class="grid gap-4 mt-4" style="grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);">
+  {% call ui.card("System status", "server", cls="p-5", sub="Read from the DVC pipeline outputs and the running service. Nothing here changes the pipeline.") %}
+    <div class="grid grid-cols-2 gap-3 mt-4">
+      <div class="stat-tile">
+        <div class="stat-label !mt-0">Last <code>dvc repro</code></div>
+        <div class="text-[15px] font-semibold text-[var(--heading)] mt-1">{{ system.last_repro or "–" }}</div>
+        <div class="text-[11px] mt-0.5">dvc.lock last written · metrics {{ system.metrics_updated or "–" }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label !mt-0">Drift status</div>
+        {% if system.drift %}
+          {% set retrain = system.drift.retrain_recommended %}
+          <div class="mt-1"><span class="badge lvl-{{ 'High' if retrain else 'Low' }}">{{ "Retrain recommended" if retrain else "No action needed" }}</span></div>
+          <div class="text-[11px] mt-1">{{ system.drift.n_drifted }}/{{ system.drift.n_features }} features drifted · {{ system.drift.concept_flagged }} concept-drift windows flagged</div>
+        {% else %}<div class="text-[13px] mt-1">No drift report (run the <code>drift</code> stage).</div>{% endif %}
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label !mt-0">Live weather API (Open-Meteo)</div>
+        {% if system.run %}
+          <div class="text-[15px] font-semibold mt-1 flex items-center">
+            <span class="status-dot" style="background: {{ 'var(--low)' if system.run.live else 'var(--moderate)' }}"></span>
+            <span class="text-[var(--heading)]">{{ "Online" if system.run.live else "Unreachable: fallback data" }}</span></div>
+        {% else %}<div class="text-[13px] mt-1">No model run yet.</div>{% endif %}
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label !mt-0">Cache age</div>
+        {% if system.run %}
+          <div class="text-[15px] font-semibold text-[var(--heading)] mt-1">{{ (system.run.age_seconds // 60) }} min</div>
+          <div class="text-[11px] mt-0.5">Refreshes after {{ system.ttl_minutes }} min</div>
+        {% else %}<div class="text-[13px] mt-1">Empty</div>{% endif %}
+      </div>
+    </div>
+  {% endcall %}
+
+  {% call ui.card("Model versions", "cpu", cls="p-5", sub="Best model per task (models/*.joblib, from the train stage).") %}
+    <table class="tbl mt-3"><thead><tr><th>Task</th><th>Model</th><th>File updated</th></tr></thead><tbody>
+      {% for m in system.models %}
+        <tr><td class="capitalize">{{ m.task }}</td><td>{{ m.model or "–" }}</td><td class="text-[12px]">{{ m.updated or "missing" }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+  {% endcall %}
+</div>
+{% endblock %}

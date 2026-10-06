@@ -3,8 +3,9 @@
 # The image needs the DVC outputs, so pull them before building:
 #   dvc pull
 #   docker build -t climaguard .
-#   docker run --rm -p 5000:5000 climaguard
-# Then open http://localhost:5000
+#   docker run --rm -p 5000:5000 -e SECRET_KEY=<random> -v climaguard-db:/app/instance climaguard
+#   docker exec -it <container> flask create-admin --email you@example.com --name You
+# Then open http://localhost:5000 (SECRET_KEY is required; accounts live in the volume)
 
 FROM python:3.14-slim
 
