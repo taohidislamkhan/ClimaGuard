@@ -320,6 +320,8 @@ class DashboardService:
         """Friendly label of the feature group that raises this disease's prediction most."""
         ck = (run.computed_at, loc, key)
         if ck not in self._drivers:
+            for k in [k for k in self._drivers if k[0] != run.computed_at]:
+                self._drivers.pop(k, None)          # older model runs
             rows = shap_utils.grouped_signed(self.store.models[key], run.rows[loc], k=8)
             up = [r for r in rows if r["shap"] > 0]
             self._drivers[ck] = up[0]["label"] if up else None

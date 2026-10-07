@@ -1,9 +1,12 @@
 """Production entry point (Render / any gunicorn host)::
 
-    gunicorn --workers 1 --threads 4 --bind 0.0.0.0:$PORT wsgi:app
+    gunicorn --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT wsgi:app
 
 One worker on purpose: the rate limiter counts in memory and accounts live in
-SQLite, so a single process keeps both consistent.
+SQLite, so a single process keeps both consistent. It also has to fit in
+512 MB (Render free), so nothing heavy happens at import: the models, the
+reference data and the live weather all load on the first request that needs
+them, and ``/healthz`` answers without touching any of them.
 
 Optional first-admin bootstrap: set ADMIN_EMAIL and ADMIN_PASSWORD in the host's
 environment and the account is created at startup if it does not exist yet.
@@ -16,7 +19,7 @@ import os
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app import create_app, start_warmup
+from app import create_app
 from dashboard.auth import hash_password
 from dashboard.extensions import db
 from dashboard.models import User
@@ -45,4 +48,3 @@ def _bootstrap_admin() -> None:
 
 
 _bootstrap_admin()
-start_warmup(app)

@@ -18,11 +18,10 @@ from pathlib import Path
 import pandas as pd
 
 from . import advisory, personal_rules, scoring, shap_utils, weather_client
-from src.core.features import drop_first_week
 from src.utils import paths
 from src.utils.config import load_params
 
-from .inference import FEATURED_PATH, MODEL_DIR, MODEL_NAMES, TARGETS, TASKS
+from .inference import MODEL_DIR, MODEL_NAMES, TARGETS, TASKS
 from .service import DISEASE_LABELS, DISEASE_ORDER, DashboardService, aqi_category
 from .storage import DEFAULT_PROFILE, clean_profile
 
@@ -172,13 +171,6 @@ class PageData:
                 "probabilities": {("Moderate" if k == "Medium" else k): round(v, 3)
                                   for k, v in pred.proba.items()}}
 
-    def warm(self) -> None:
-        """Build the tree explainers once so the first My Risk load is fast."""
-        x = self.svc.store.to_matrix([self.svc.store.template])
-        for key in DISEASE_ORDER:
-            shap_utils.local_shap(self.svc.store.models[key], x)
-        self._featured()          # dataset rows for the country drawer on the Risk Map
-
     # -- My Risk ---------------------------------------------------------------
     def disease(self, key: str, loc: str, profile: dict | None = None) -> dict:
         """Deep dive for one disease; ``profile`` is the signed-in user's saved one (or None)."""
@@ -191,6 +183,9 @@ class PageData:
 
         cache_key = (run.computed_at, loc, key)
         if cache_key not in self._shap_cache:
+            # Keep only the current model run's explanations.
+            for k in [k for k in self._shap_cache if k[0] != run.computed_at]:
+                self._shap_cache.pop(k, None)
             self._shap_cache[cache_key] = shap_utils.grouped_signed(
                 self.svc.store.models[key], run.rows[loc], k=8)
         shap_rows = self._shap_cache[cache_key]
@@ -308,9 +303,10 @@ class PageData:
         raise KeyError(view)
 
     def _featured(self) -> pd.DataFrame:
+        """Dataset rows for the country drawer on the Risk Map (model columns only)."""
         with self._flock:
             if self._fd is None:
-                self._fd = drop_first_week(pd.read_parquet(FEATURED_PATH))
+                self._fd = self.svc.store.read_features(["country_name", "date"])
             return self._fd
 
     def _detail(self, name: str, pred, x: pd.DataFrame) -> dict:

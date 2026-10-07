@@ -20,14 +20,17 @@ feature row is built in three layers:
 
 from __future__ import annotations
 
+import gc
 import json
+import threading
 import warnings
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
-from src.core.features import drop_first_week
+from src.core.features import LAG1_SUFFIX, drop_first_week
 from src.core.models import MODEL_LABELS
 from src.utils import paths
 from src.utils.config import load_params
@@ -115,36 +118,111 @@ class Prediction:
     diseases: dict[str, float]       # regressor predictions in target units
 
 
+class _LazyModels(dict):
+    """``models[key]`` loads ``models/best_<key>.joblib`` on first use.
+
+    Only the validation winners in TASKS (one classifier, five regressors)
+    can ever be loaded; the baseline candidates are never touched.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._lock = threading.RLock()        # re-entered to load "overall" for the check
+
+    def __missing__(self, key: str):
+        if key not in TASKS:
+            raise KeyError(key)
+        with self._lock:
+            if not dict.__contains__(self, key):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Single-threaded predict: bit-identical outputs, and ~2.5x faster than
+                    # parallel for the dashboard's small batches (thread start-up dominates).
+                    model = load_model(MODEL_DIR / TASKS[key])
+                if key != "overall" and (list(model.feature_names_in_)
+                                         != list(self["overall"].feature_names_in_)):
+                    raise RuntimeError(f"Model {key} uses a different feature list")
+                self[key] = model
+            return dict.__getitem__(self, key)
+
+
 class ModelStore:
-    """Loads the six models and the training reference data once."""
+    """The six winner models and the training reference data.
+
+    Nothing heavy happens in ``__init__``: each model loads on its first
+    prediction and the reference data on its first use, so the web process
+    boots small and answers health checks straight away.
+    """
 
     def __init__(self) -> None:
         missing = [f for f in TASKS.values() if not (MODEL_DIR / f).exists()]
         if missing:
             raise FileNotFoundError(f"Missing model files in {MODEL_DIR}: {missing} "
                                     "— run `dvc pull` (or `dvc repro`).")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            # Single-threaded predict: bit-identical outputs, and ~2.5x faster than
-            # parallel for the dashboard's small batches (thread start-up dominates).
-            self.models = {k: load_model(MODEL_DIR / f) for k, f in TASKS.items()}
+        self.models = _LazyModels()
+        self._features: list[str] | None = None
+        self._data: dict | None = None
+        self._lock = threading.Lock()
 
-        self.features: list[str] = list(self.models["overall"].feature_names_in_)
-        for k, m in self.models.items():
-            if list(m.feature_names_in_) != self.features:
-                raise RuntimeError(f"Model {k} uses a different feature list")
+    @property
+    def features(self) -> list[str]:
+        """Model input columns (every winner shares the overall classifier's list)."""
+        if self._features is None:
+            self._features = list(self.models["overall"].feature_names_in_)
+        return self._features
 
-        # Training dropped the first week per country (NaN lag1w); mirror it.
-        fd = drop_first_week(pd.read_parquet(FEATURED_PATH))
+    @property
+    def classes(self) -> list[str]:
+        return [str(c) for c in self.models["overall"].classes_]
+
+    def read_features(self, extra: list[str]) -> pd.DataFrame:
+        """``features.parquet`` with only the model columns plus ``extra``,
+        first week per country dropped (training did the same: NaN lag1w)."""
+        schema = pq.read_schema(FEATURED_PATH).names
+        lag1 = next(c for c in schema if c.endswith(LAG1_SUFFIX))   # what drop_first_week keys on
+        want = set(self.features) | set(extra) | {lag1}
+        return drop_first_week(pd.read_parquet(FEATURED_PATH, columns=[c for c in schema if c in want]))
+
+    def _reference(self) -> dict:
+        if self._data is None:
+            with self._lock:
+                if self._data is None:
+                    self._data = self._load_reference()
+        return self._data
+
+    def _load_reference(self) -> dict:
+        country_col = f"country_code_{COUNTRY_CODE}"
+        fd = self.read_features(["date", country_col, *WEATHER_COLS, *TARGETS.values()])
         train = fd[fd["date"] <= TRAIN_END_DATE]
+        data = {
+            "train_median": train[self.features].median(numeric_only=True),
+            # Sorted training targets -> percentile lookup for disease scores.
+            "train_targets": {k: np.sort(train[t].dropna().to_numpy(float))
+                              for k, t in TARGETS.items()},
+            "country": fd[fd[country_col] == 1].sort_values("date").reset_index(drop=True),
+        }
+        data["template"] = data["country"].iloc[-1]
+        del fd, train
+        gc.collect()
+        return data
 
-        self.train_median = train[self.features].median(numeric_only=True)
-        # Sorted training targets -> percentile lookup for disease scores.
-        self.train_targets = {k: np.sort(train[t].dropna().to_numpy(float))
-                              for k, t in TARGETS.items()}
-        self.country = fd[fd[f"country_code_{COUNTRY_CODE}"] == 1].sort_values("date")
-        self.template = self.country.iloc[-1]
-        self.classes = [str(c) for c in self.models["overall"].classes_]
+    @property
+    def train_median(self) -> pd.Series:
+        return self._reference()["train_median"]
+
+    @property
+    def train_targets(self) -> dict[str, np.ndarray]:
+        return self._reference()["train_targets"]
+
+    @property
+    def country(self) -> pd.DataFrame:
+        """Bangladesh rows of the dataset (oldest first)."""
+        return self._reference()["country"]
+
+    @property
+    def template(self) -> pd.Series:
+        """Latest Bangladesh week: the base of every live feature row."""
+        return self._reference()["template"]
 
     # -- feature rows ---------------------------------------------------------
     def country_history(self, n_weeks: int) -> pd.DataFrame:
@@ -174,9 +252,10 @@ class ModelStore:
         """Batch inference: one Prediction per row of X."""
         proba = self.models["overall"].predict_proba(X)
         dis = {k: np.asarray(self.models[k].predict(X), dtype=float) for k in TARGETS}
+        classes = self.classes
         return [
             Prediction(
-                proba={c: float(proba[i, j]) for j, c in enumerate(self.classes)},
+                proba={c: float(proba[i, j]) for j, c in enumerate(classes)},
                 diseases={k: float(dis[k][i]) for k in TARGETS},
             )
             for i in range(len(X))

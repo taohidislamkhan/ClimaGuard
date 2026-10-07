@@ -100,6 +100,29 @@ def test_linear_shap_is_additive(store):
     assert sv.sum() + clf.intercept_[hi] == pytest.approx(logit, rel=1e-6)
 
 
+
+@pytest.mark.parametrize("key", ["respiratory", "vector", "waterborne", "heat"])
+def test_tree_shap_matches_shap_package(store, key):
+    """The web app's native TreeSHAP equals shap.TreeExplainer (float32 precision)
+    and adds up to the prediction; the shap package itself stays out of the app."""
+    from shap import TreeExplainer
+    model = store.models[key]
+    x = store.to_matrix(store.country_history(3))
+    ours = shap_utils.tree_shap(model, x)
+    ref = np.asarray(TreeExplainer(model).shap_values(x))
+    assert np.abs(ours - ref).max() <= 1e-5 * np.abs(ref).max()
+    base = model.predict(x) - ref.sum(1)
+    assert ours.sum(1) + base == pytest.approx(model.predict(x), rel=1e-5, abs=1e-4)
+
+
+def test_models_load_lazily():
+    from dashboard.inference import ModelStore
+    st = ModelStore()
+    assert dict(st.models) == {} and st._data is None
+    st.predict(st.to_matrix([st.template]))
+    assert set(st.models) == {"overall", "respiratory", "vector", "heat", "waterborne", "cardio"}
+
+
 def test_friendly_labels():
     assert shap_utils.friendly_label("pm25_ugm3_roll_mean_4w") == "PM2.5"
     assert shap_utils.friendly_label("temperature_celsius_lag8w") == "Temperature"

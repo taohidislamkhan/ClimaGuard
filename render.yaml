@@ -9,13 +9,20 @@ services:
     # reset on every restart/redeploy; ADMIN_* recreates the admin).
     # For accounts that persist, switch to `starter` and uncomment `disk`.
     plan: free
-    healthCheckPath: /api/about
+    # Answers without loading models, data or live weather.
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: SESSION_COOKIE_SECURE
         value: "1"
+      # Stay inside 512 MB: one OpenMP thread (xgboost / numpy) and at most two
+      # glibc malloc arenas for gunicorn's four threads.
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
       # Read access to the private DagsHub DVC remote (used only at build time).
       - key: DAGSHUB_USER
         sync: false

@@ -56,7 +56,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HOST=0.0.0.0 \
-    PORT=5000
+    PORT=5000 \
+    OMP_NUM_THREADS=1 \
+    MALLOC_ARENA_MAX=2
 
 # xgboost needs the OpenMP runtime, which the slim image leaves out.
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
@@ -73,5 +75,5 @@ RUN rm -rf .dvc/tmp .dvc/cache data/raw models/candidates \
     data/processed/train.parquet data/processed/val.parquet data/processed/test.parquet
 
 EXPOSE 5000
-# One worker: in-memory rate limits + SQLite accounts (see wsgi.py).
+# One worker: in-memory rate limits + SQLite accounts, and it fits in 512 MB (see wsgi.py).
 CMD gunicorn --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:${PORT} wsgi:app

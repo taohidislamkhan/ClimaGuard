@@ -235,7 +235,9 @@ When asked, set `DAGSHUB_USER` and `DAGSHUB_TOKEN` (a DagsHub access token with 
 the DVC remote; the Docker build uses them to `dvc pull` the models) and `ADMIN_EMAIL` /
 `ADMIN_PASSWORD` (the first admin, created at startup by `wsgi.py`). `SECRET_KEY` is generated
 for you. The free plan has no disk, so accounts reset when the service restarts. Switch to
-`starter` and uncomment the `disk` block to keep them.
+`starter` and uncomment the `disk` block to keep them. The service runs one gunicorn worker
+with four threads, sets `OMP_NUM_THREADS=1` and `MALLOC_ARENA_MAX=2` to stay inside 512 MB, and
+Render health-checks `/healthz`.
 
 ## 6. DVC workflow
 
@@ -350,9 +352,15 @@ Revert it the same way as the parameter demo in §6.
 
 `python app.py` → http://127.0.0.1:5000. The dashboard only reads pipeline outputs (`models/best_*.joblib`, `data/processed/features.parquet`, `artifacts/`, `reports/`). It never trains; which model won is read from `reports/metrics/validation_metrics.json`.
 
-On first start it loads the six models (~2–8 s) and caches Dhaka's 2015–2025
-climatology from Open-Meteo in `data/cache/dhaka_climatology.json`. A background
-thread then fetches live weather, runs the models and builds the SHAP explainers.
+Nothing heavy runs at startup, so the process boots small (it has to fit in Render's free
+512 MB). The first request that needs them loads the six winner models (never the baseline
+candidates), reads only the needed columns of `features.parquet`, caches Dhaka's 2015–2025
+climatology from Open-Meteo in `data/cache/dhaka_climatology.json` and fetches live weather.
+SHAP is computed per request for the one row shown: exact TreeSHAP through XGBoost's native
+implementation, with the Random Forests converted tree by tree, so the shap package is never
+imported by the web process (a test checks it matches `shap.TreeExplainer`). Measured peak
+memory on Windows after hitting `/`, `/my-risk` and `/how-it-works`: about 365 MB, down from
+about 585 MB before. `GET /healthz` answers without loading anything.
 Stale data is served immediately while a refresh runs (every 30 minutes, shared by all users).
 Accounts, profiles and settings are stored per user in `instance/app.db` (see §10); the regional
 risk history stays in `data/cache/risk_history.db`. Both are git-ignored and not DVC-tracked.

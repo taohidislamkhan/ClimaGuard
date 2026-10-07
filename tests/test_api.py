@@ -10,6 +10,14 @@ TOP_KEYS = {"overall", "diseases", "shap_factors", "environment", "trend",
             "advisories", "changes", "map", "updated_at"}
 
 
+def test_healthz_loads_nothing(client):
+    store = client.application.config["SERVICE"].store
+    loaded = set(store.models)
+    r = client.get("/healthz")
+    assert r.status_code == 200 and r.get_json() == {"status": "ok"}
+    assert set(store.models) == loaded
+
+
 def test_dashboard_schema(client):
     r = client.get("/api/dashboard?location=Dhaka")
     assert r.status_code == 200
